@@ -17,6 +17,8 @@ interface SpeedwayCanvasProps {
   turboBannerTeam: TeamId | null;
   trackId?: string;
   bossProgress?: number | null;
+  myEmote?: string | null;
+  opponentEmote?: string | null;
 }
 
 // Deterministic pseudo-random helper for crisp, flicker-free track scenery
@@ -56,6 +58,47 @@ const BEACH_SPECKLES = Array.from({ length: 48 }, (_, i) => ({
   v: seeded(i, 32),
   r: 1.2 + seeded(i, 33) * 1.8,
   color: i % 5 === 0 ? '#fb7185' : i % 3 === 0 ? '#fef3c7' : '#d97706',
+}));
+
+const CORAL_DOTS = Array.from({ length: 54 }, (_, i) => ({
+  u: seeded(i, 51),
+  v: seeded(i, 52),
+  r: 2.2 + seeded(i, 53) * 4.2,
+  color: ['#fb7185', '#fb923c', '#f472b6', '#fde047', '#34d399', '#c084fc'][
+    i % 6
+  ],
+}));
+
+const CORAL_BUBBLES = Array.from({ length: 36 }, (_, i) => ({
+  u: seeded(i, 61),
+  v: seeded(i, 62),
+  r: 1.6 + seeded(i, 63) * 3.2,
+  speed: 0.018 + seeded(i, 64) * 0.028,
+  phase: seeded(i, 65) * Math.PI * 2,
+}));
+
+const FOREST_FIREFLIES = Array.from({ length: 46 }, (_, i) => ({
+  u: seeded(i, 71),
+  v: seeded(i, 72),
+  r: 1.6 + seeded(i, 73) * 2.2,
+  phase: seeded(i, 74) * Math.PI * 2,
+  speed: 1.4 + seeded(i, 75) * 2.4,
+}));
+
+const VOLCANO_ROCKS = Array.from({ length: 34 }, (_, i) => ({
+  u: seeded(i, 81),
+  v: seeded(i, 82),
+  rx: 5 + seeded(i, 83) * 11,
+  ry: 4 + seeded(i, 84) * 8,
+  angle: seeded(i, 85) * Math.PI,
+}));
+
+const VOLCANO_EMBERS = Array.from({ length: 42 }, (_, i) => ({
+  u: seeded(i, 91),
+  v: seeded(i, 92),
+  r: 1.2 + seeded(i, 93) * 2.2,
+  speed: 0.02 + seeded(i, 94) * 0.032,
+  phase: seeded(i, 95) * Math.PI * 2,
 }));
 
 /**
@@ -125,12 +168,16 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
   turboBannerTeam,
   trackId = 'track-sunny',
   bossProgress = null,
+  myEmote = null,
+  opponentEmote = null,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const myStateRef = useRef(myState);
   const oppStateRef = useRef(opponentState);
   const trackIdRef = useRef(trackId);
   const bossProgressRef = useRef<number | null>(bossProgress);
+  const myEmoteRef = useRef<string | null>(myEmote);
+  const oppEmoteRef = useRef<string | null>(opponentEmote);
   const bossWasActiveRef = useRef(bossProgress != null);
   const smoothMyProg = useRef(myState.progress);
   const smoothOppProg = useRef(opponentState.progress);
@@ -141,6 +188,8 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
   oppStateRef.current = opponentState;
   trackIdRef.current = trackId;
   bossProgressRef.current = bossProgress;
+  myEmoteRef.current = myEmote;
+  oppEmoteRef.current = opponentEmote;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -366,6 +415,175 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
           ctx.fill();
         }
         ctx.restore();
+      } else if (activeTrackId === 'track-coral') {
+        // Deep ocean turquoise water with colorful coral dots & rising bubbles
+        const coralGrad = ctx.createLinearGradient(0, 0, width, height);
+        coralGrad.addColorStop(0, '#0e7490');
+        coralGrad.addColorStop(0.5, '#0891b2');
+        coralGrad.addColorStop(1, '#155e75');
+        ctx.fillStyle = coralGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        // Gentle underwater wave caustics
+        ctx.save();
+        ctx.strokeStyle = 'rgba(165, 243, 252, 0.16)';
+        ctx.lineWidth = 2;
+        const reefShift = Math.sin(now / 850) * 10;
+        for (let y = 18; y < height; y += 28) {
+          ctx.beginPath();
+          for (let x = -12; x < width + 24; x += 40) {
+            ctx.moveTo(x + reefShift, y);
+            ctx.quadraticCurveTo(x + 10 + reefShift, y - 5, x + 20 + reefShift, y);
+          }
+          ctx.stroke();
+        }
+
+        // Colorful coral reef dots
+        for (const cd of CORAL_DOTS) {
+          ctx.fillStyle = cd.color;
+          ctx.globalAlpha = 0.65;
+          ctx.beginPath();
+          ctx.arc(cd.u * width, cd.v * height, cd.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Gently rising ocean bubbles
+        for (const cb of CORAL_BUBBLES) {
+          const by = ((cb.v - (now / 1000) * cb.speed) % 1 + 1) % 1 * height;
+          const bx =
+            ((cb.u + Math.sin(now / 1100 + cb.phase) * 0.012 + 1) % 1) * width;
+          ctx.globalAlpha = 0.5;
+          ctx.strokeStyle = '#cffafe';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(bx, by, cb.r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(bx - cb.r * 0.3, by - cb.r * 0.3, Math.max(0.8, cb.r * 0.25), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      } else if (activeTrackId === 'track-forest') {
+        // Lush deep emerald fairy glade with glowing golden fireflies
+        const forestGrad = ctx.createRadialGradient(cx, cy, 12, cx, cy, Math.max(width, height) * 0.72);
+        forestGrad.addColorStop(0, '#047857');
+        forestGrad.addColorStop(0.55, '#065f46');
+        forestGrad.addColorStop(1, '#022c22');
+        ctx.fillStyle = forestGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        // Soft dappled emerald glade patches
+        ctx.fillStyle = 'rgba(52, 211, 153, 0.08)';
+        ctx.beginPath();
+        ctx.ellipse(width * 0.22, height * 0.24, width * 0.22, height * 0.18, 0.2, 0, Math.PI * 2);
+        ctx.ellipse(width * 0.78, height * 0.76, width * 0.25, height * 0.2, -0.2, 0, Math.PI * 2);
+        ctx.ellipse(cx, cy, straightHalf + outerRadius * 0.45, outerRadius * 0.48, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glowing golden fireflies drifting gently
+        ctx.save();
+        for (const ff of FOREST_FIREFLIES) {
+          const glow = 0.28 + 0.72 * (0.5 + 0.5 * Math.sin((now / 1000) * ff.speed + ff.phase));
+          const fx =
+            ((ff.u + Math.sin(now / 1600 + ff.phase) * 0.018 + 1) % 1) * width;
+          const fy =
+            ((ff.v + Math.cos(now / 1900 + ff.phase) * 0.018 + 1) % 1) * height;
+          ctx.globalAlpha = glow * 0.45;
+          ctx.fillStyle = '#facc15';
+          ctx.beginPath();
+          ctx.arc(fx, fy, ff.r * 2.4, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.globalAlpha = glow;
+          ctx.fillStyle = '#fef9c3';
+          ctx.beginPath();
+          ctx.arc(fx, fy, ff.r * 0.85, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      } else if (activeTrackId === 'track-volcano') {
+        // Glowing lava orange-red infield with dark volcanic rock
+        const lavaPulse = 0.5 + 0.5 * Math.sin(now / 650);
+        const lavaGrad = ctx.createRadialGradient(
+          cx,
+          cy,
+          10,
+          cx,
+          cy,
+          Math.max(width, height) * 0.72
+        );
+        lavaGrad.addColorStop(0, lavaPulse > 0.5 ? '#f97316' : '#ea580c');
+        lavaGrad.addColorStop(0.45, '#dc2626');
+        lavaGrad.addColorStop(0.85, '#7f1d1d');
+        lavaGrad.addColorStop(1, '#292524');
+        ctx.fillStyle = lavaGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        // Dark volcanic rock patches
+        ctx.save();
+        for (const rk of VOLCANO_ROCKS) {
+          ctx.save();
+          ctx.translate(rk.u * width, rk.v * height);
+          ctx.rotate(rk.angle);
+          ctx.fillStyle = 'rgba(28, 25, 23, 0.72)';
+          ctx.strokeStyle = 'rgba(251, 146, 60, 0.35)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, rk.rx, rk.ry, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Rising glowing lava embers
+        for (const em of VOLCANO_EMBERS) {
+          const ey = ((em.v - (now / 1000) * em.speed) % 1 + 1) % 1 * height;
+          const ex =
+            ((em.u + Math.sin(now / 900 + em.phase) * 0.014 + 1) % 1) * width;
+          ctx.globalAlpha = 0.65 + 0.35 * Math.sin(now / 300 + em.phase);
+          ctx.fillStyle = em.r > 2.2 ? '#fef08a' : '#fb923c';
+          ctx.beginPath();
+          ctx.arc(ex, ey, em.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      } else if (activeTrackId === 'track-neon') {
+        // Dark cyber-city midnight navy grid background
+        const neonGrad = ctx.createLinearGradient(0, 0, width, height);
+        neonGrad.addColorStop(0, '#020617');
+        neonGrad.addColorStop(0.5, '#0b1120');
+        neonGrad.addColorStop(1, '#0f172a');
+        ctx.fillStyle = neonGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        // Glowing cyber grid lines
+        ctx.save();
+        const gridStep = 28;
+        ctx.strokeStyle = 'rgba(34, 211, 238, 0.14)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < width; x += gridStep) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+        for (let y = 0; y < height; y += gridStep) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+        // Subtle neon magenta glow pulses at alternating grid nodes
+        ctx.fillStyle = 'rgba(232, 121, 249, 0.25)';
+        for (let x = gridStep; x < width; x += gridStep * 2) {
+          for (let y = gridStep; y < height; y += gridStep * 2) {
+            ctx.beginPath();
+            ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
       } else {
         // Default: 'track-sunny' — vibrant lush green meadow stripes
         const grassGrad = ctx.createLinearGradient(0, 0, 0, height);
@@ -409,6 +627,30 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
         roadColor = '#14132e';
         laneDashColor = 'rgba(192, 132, 252, 0.82)';
         emblemColor = 'rgba(216, 180, 254, 0.3)';
+      } else if (activeTrackId === 'track-coral') {
+        curbColorA = '#fb7185';
+        curbColorB = '#ffffff';
+        roadColor = '#0f766e';
+        laneDashColor = 'rgba(204, 251, 241, 0.82)';
+        emblemColor = 'rgba(207, 250, 254, 0.28)';
+      } else if (activeTrackId === 'track-forest') {
+        curbColorA = '#dc2626';
+        curbColorB = '#fef3c7';
+        roadColor = '#57534e';
+        laneDashColor = 'rgba(254, 243, 199, 0.74)';
+        emblemColor = 'rgba(254, 240, 138, 0.28)';
+      } else if (activeTrackId === 'track-volcano') {
+        curbColorA = '#f97316';
+        curbColorB = '#facc15';
+        roadColor = '#18181b';
+        laneDashColor = 'rgba(253, 224, 71, 0.82)';
+        emblemColor = 'rgba(254, 215, 170, 0.3)';
+      } else if (activeTrackId === 'track-neon') {
+        curbColorA = '#22d3ee';
+        curbColorB = '#e879f9';
+        roadColor = '#090d16';
+        laneDashColor = '#22d3ee';
+        emblemColor = 'rgba(34, 211, 238, 0.34)';
       }
 
       const makeRainbowGradient = () => {
@@ -437,6 +679,18 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
         ctx.shadowBlur = 12;
         ctx.lineWidth = 8;
         ctx.stroke();
+      } else if (activeTrackId === 'track-neon') {
+        ctx.shadowColor = '#22d3ee';
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = curbColorA;
+        ctx.lineWidth = 8;
+        ctx.stroke();
+        ctx.shadowColor = '#e879f9';
+        ctx.shadowBlur = 12;
+        ctx.setLineDash([14, 14]);
+        ctx.strokeStyle = curbColorB;
+        ctx.lineWidth = 8;
+        ctx.stroke();
       } else {
         ctx.strokeStyle = curbColorA;
         ctx.lineWidth = 8;
@@ -455,11 +709,23 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
       ctx.lineWidth = trackWidth;
       ctx.stroke();
 
-      // Extra surface detail for Snow (icy frost sheen) or Space (starry cosmic speckles)
+      // Extra surface detail for Snow, Space, Coral, or Forest
       if (activeTrackId === 'track-snow') {
         traceOval(outerRadius);
         ctx.strokeStyle = 'rgba(186, 230, 253, 0.18)';
         ctx.lineWidth = trackWidth * 0.72;
+        ctx.stroke();
+      } else if (activeTrackId === 'track-coral') {
+        // Sea-glass sheen along teal road
+        traceOval(outerRadius);
+        ctx.strokeStyle = 'rgba(94, 234, 212, 0.14)';
+        ctx.lineWidth = trackWidth * 0.76;
+        ctx.stroke();
+      } else if (activeTrackId === 'track-forest') {
+        // Subtle warm mossy-stone edge tint
+        traceOval(outerRadius);
+        ctx.strokeStyle = 'rgba(134, 239, 172, 0.08)';
+        ctx.lineWidth = trackWidth * 0.88;
         ctx.stroke();
       } else if (activeTrackId === 'track-space') {
         ctx.save();
@@ -496,6 +762,13 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3.5;
         ctx.stroke();
+      } else if (activeTrackId === 'track-neon') {
+        ctx.shadowColor = '#22d3ee';
+        ctx.shadowBlur = 8;
+        ctx.setLineDash([16, 14]);
+        ctx.strokeStyle = laneDashColor;
+        ctx.lineWidth = 3.2;
+        ctx.stroke();
       } else {
         ctx.setLineDash([16, 14]);
         ctx.strokeStyle = laneDashColor;
@@ -512,6 +785,18 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
         ctx.strokeStyle = rainbow;
         ctx.shadowColor = '#38bdf8';
         ctx.shadowBlur = 10;
+        ctx.lineWidth = 6;
+        ctx.stroke();
+      } else if (activeTrackId === 'track-neon') {
+        ctx.shadowColor = '#22d3ee';
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = curbColorA;
+        ctx.lineWidth = 6;
+        ctx.stroke();
+        ctx.shadowColor = '#e879f9';
+        ctx.shadowBlur = 10;
+        ctx.setLineDash([12, 12]);
+        ctx.strokeStyle = curbColorB;
         ctx.lineWidth = 6;
         ctx.stroke();
       } else {
@@ -704,6 +989,7 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
 
       // Draw floating "YOU" badge above the local player's car
       const myPt = myTeam === 'doggy' ? doggyPt : slothyPt;
+      const oppPt = myTeam === 'doggy' ? slothyPt : doggyPt;
       ctx.save();
       ctx.fillStyle = myTeam === 'doggy' ? '#e11d48' : '#0d9488';
       ctx.strokeStyle = '#ffffff';
@@ -722,6 +1008,93 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
       ctx.textBaseline = 'middle';
       ctx.fillText('YOU', myPt.x, by + badgeH / 2 + 0.5);
       ctx.restore();
+
+      // Draw floating live emote speech bubbles above cars when active
+      const drawEmoteBubble = (
+        anchorX: number,
+        anchorY: number,
+        text: string,
+        borderColor: string,
+        yOffset: number
+      ) => {
+        ctx.save();
+        const bob = Math.sin(now / 180) * 2.2;
+        ctx.font = '800 11.5px Nunito, sans-serif';
+        const textW = ctx.measureText(text).width;
+        const padX = 11;
+        const bubbleW = Math.max(44, textW + padX * 2);
+        const bubbleH = 24;
+        const clampedX = Math.max(
+          bubbleW / 2 + 6,
+          Math.min(width - bubbleW / 2 - 6, anchorX)
+        );
+        const clampedTop = Math.max(6, anchorY - yOffset - bubbleH + bob);
+        const bubbleLeft = clampedX - bubbleW / 2;
+
+        // Soft drop shadow + crisp rounded white speech bubble
+        ctx.shadowColor = 'rgba(15, 23, 42, 0.28)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetY = 2;
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.roundRect(bubbleLeft, clampedTop, bubbleW, bubbleH, 12);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.stroke();
+
+        // Little pointer tail toward car
+        const tailX = Math.max(
+          bubbleLeft + 10,
+          Math.min(bubbleLeft + bubbleW - 10, anchorX)
+        );
+        const tailY = clampedTop + bubbleH - 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(tailX - 5, tailY);
+        ctx.lineTo(tailX, tailY + 6);
+        ctx.lineTo(tailX + 5, tailY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(tailX - 5, tailY + 0.5);
+        ctx.lineTo(tailX, tailY + 6);
+        ctx.lineTo(tailX + 5, tailY + 0.5);
+        ctx.stroke();
+
+        // Bold dark emote text
+        ctx.fillStyle = '#0f172a';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, clampedX, clampedTop + bubbleH / 2 + 0.5);
+        ctx.restore();
+      };
+
+      const activeOppEmote = oppEmoteRef.current;
+      if (activeOppEmote) {
+        drawEmoteBubble(
+          oppPt.x,
+          oppPt.y,
+          activeOppEmote,
+          myTeam === 'doggy' ? '#0d9488' : '#e11d48',
+          30 * carScale
+        );
+      }
+
+      const activeMyEmote = myEmoteRef.current;
+      if (activeMyEmote) {
+        drawEmoteBubble(
+          myPt.x,
+          myPt.y,
+          activeMyEmote,
+          myTeam === 'doggy' ? '#e11d48' : '#0d9488',
+          42 * carScale
+        );
+      }
 
       ctx.restore();
       rafId = requestAnimationFrame(render);

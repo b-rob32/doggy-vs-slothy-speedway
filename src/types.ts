@@ -38,10 +38,20 @@ export interface RaceConfig {
   sharedMath: boolean;
   fairRaceNoPerks: boolean;
   powerUpsEnabled: boolean;
+  grandPrixMode?: boolean;
   trackId: string;
   hostMath: PlayerMathConfig;
   guestMath: PlayerMathConfig;
   cpuDifficulty: CpuDifficulty;
+}
+
+export interface GrandPrixState {
+  active: boolean;
+  cupName: string;
+  tracks: string[]; // 3 track IDs
+  raceIndex: number; // 0, 1, 2
+  myPoints: number;
+  opponentPoints: number;
 }
 
 export interface MathProblem {
@@ -114,7 +124,7 @@ export interface DailyQuest {
 }
 
 export interface DailyQuestState {
-  dateKey: string; // YYYY-MM-DD
+  dateKey: string;
   quests: DailyQuest[];
 }
 
@@ -129,6 +139,7 @@ export interface CareerStats {
   losses: number;
   ties: number;
   bossWins: number;
+  grandPrixWins: number;
   totalQuestions: number;
   totalCorrect: number;
   totalWrong: number;
@@ -157,15 +168,20 @@ export interface RaceRecord {
 
 export interface TeamProfile {
   team: TeamId;
-  racerName: string; // Optional custom daughter name!
+  racerName: string;
   coins: number;
+  xp: number;
+  practiceStreak: number;
+  lastPracticeDate: string | null;
+  racesSinceGift: number;
+  mysteryGiftsReady: number;
   unlockedIds: string[];
   equipped: EquippedLoadout;
   stats: CareerStats;
   recentRaces: RaceRecord[];
-  missedFactCounts: Record<string, number>; // e.g., "multiplication:7:8": 3
+  missedFactCounts: Record<string, number>;
   dailyQuests: DailyQuestState;
-  badges: string[]; // unlocked trophy badge IDs
+  badges: string[];
 }
 
 export interface HeadToHeadRecord {
@@ -225,6 +241,12 @@ export interface RaceSummary {
   coins: CoinBreakdown;
   perOperationCounts: Record<SingleOperation, OperationStat>;
   newlyUnlockedBadges?: string[];
+  xpEarned?: number;
+  leveledUpTo?: number | null;
+  levelUpCoins?: number;
+  mysteryGiftEarned?: boolean;
+  grandPrix?: GrandPrixState | null;
+  grandPrixBonusCoins?: number;
 }
 
 export type PeerMessage =
@@ -256,6 +278,7 @@ export type PeerMessage =
       mode: GameMode;
       startAt: number;
       config: RaceConfig;
+      grandPrix?: GrandPrixState | null;
     }
   | {
       type: 'progress';
@@ -269,6 +292,10 @@ export type PeerMessage =
       shieldActive?: boolean;
       finished: boolean;
       finishTimeMs: number | null;
+    }
+  | {
+      type: 'emote';
+      emote: string;
     }
   | {
       type: 'rematch-request';

@@ -21,6 +21,7 @@ import {
   getTodayKey,
   updateDailyQuestsAfterRace,
 } from './quests';
+import { computeRaceXp, getLevelInfo } from './progression';
 
 const STORAGE_KEY = 'doggy-vs-slothy-speedway-save-v1';
 
@@ -31,6 +32,7 @@ function emptyStats(): CareerStats {
     losses: 0,
     ties: 0,
     bossWins: 0,
+    grandPrixWins: 0,
     totalQuestions: 0,
     totalCorrect: 0,
     totalWrong: 0,
@@ -51,6 +53,11 @@ function createDefaultProfile(team: TeamId): TeamProfile {
     team,
     racerName: '',
     coins: 60, // friendly starter allowance!
+    xp: 0,
+    practiceStreak: 0,
+    lastPracticeDate: null,
+    racesSinceGift: 0,
+    mysteryGiftsReady: 1, // welcome Mystery Gift Box!
     unlockedIds: [...DEFAULT_UNLOCKED_IDS],
     equipped: { ...DEFAULT_LOADOUT },
     stats: emptyStats(),
@@ -112,6 +119,24 @@ function mergeProfile(
         ? loaded.racerName
         : fallback.racerName,
     coins: typeof loaded.coins === 'number' ? loaded.coins : fallback.coins,
+    xp: typeof loaded.xp === 'number' ? loaded.xp : fallback.xp,
+    practiceStreak:
+      typeof loaded.practiceStreak === 'number'
+        ? loaded.practiceStreak
+        : fallback.practiceStreak,
+    lastPracticeDate:
+      typeof loaded.lastPracticeDate === 'string' ||
+      loaded.lastPracticeDate === null
+        ? loaded.lastPracticeDate
+        : fallback.lastPracticeDate,
+    racesSinceGift:
+      typeof loaded.racesSinceGift === 'number'
+        ? loaded.racesSinceGift
+        : fallback.racesSinceGift,
+    mysteryGiftsReady:
+      typeof loaded.mysteryGiftsReady === 'number'
+        ? loaded.mysteryGiftsReady
+        : fallback.mysteryGiftsReady,
     unlockedIds: Array.isArray(loaded.unlockedIds)
       ? Array.from(new Set([...DEFAULT_UNLOCKED_IDS, ...loaded.unlockedIds]))
       : fallback.unlockedIds,
@@ -187,10 +212,19 @@ export function calculateCoins(
   };
 }
 
-export function recordRaceInSave(
+function getYesterdayKey(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function recordRaceWithProgression(
   save: SaveData,
   summary: RaceSummary
-): SaveData {
+): { nextSave: SaveData; enrichedSummary: RaceSummary } {
   const team = summary.myTeam;
   const profile = save.profiles[team];
 
@@ -252,16 +286,71 @@ export function recordRaceInSave(
     summary.mode === 'coop-boss' && summary.result === 'win';
   const isPerfectRace =
     summary.accuracy === 100 && summary.myState.correctCount >= 8;
+  const isGrandPrixWin = Boolean(
+    summary.grandPrix &&
+      summary.grandPrix.raceIndex === 2 &&
+      summary.grandPrix.myPoints >= summary.grandPrix.opponentPoints
+  );
+  const grandPrixBonusCoins = isGrandPrixWin ? 75 : 0;
+
+  // XP & Level progression
+  const xpEarned = computeRaceXp(summary);
+  const oldLevel = getLevelInfo(profile.xp).level;
+  const nextXp = profile.xp + xpEarned;
+  const newLevel = getLevelInfo(nextXp).level;
+  const levelsGained = Math.max(0, newLevel - oldLevel);
+  const levelUpCoins = levelsGained * 50;
+  const leveledUpTo = levelsGained > 0 ? newLevel : null;
+
+  // Daily practice streak
+  const today = getTodayKey();
+  let nextPracticeStreak = profile.practiceStreak;
+  let nextLastPracticeDate = profile.lastPracticeDate;
+  let streakGiftBonus = 0;
+
+  if (profile.lastPracticeDate !== today) {
+    const yesterday = getYesterdayKey();
+    nextPracticeStreak =
+      profile.lastPracticeDate === yesterday ? profile.practiceStreak + 1 : 1;
+    nextLastPracticeDate = today;
+    if (nextPracticeStreak >= 2) {
+      streakGiftBonus = 1;
+    }
+  }
+
+  // Mystery Gift Box counter (1 gift every 3 races + any daily streak gift)
+  let nextRacesSinceGift = profile.racesSinceGift + 1;
+  let raceGiftEarned = false;
+  let giftsEarnedThisRace = streakGiftBonus;
+  if (nextRacesSinceGift >= 3) {
+    nextRacesSinceGift = 0;
+    raceGiftEarned = true;
+    giftsEarnedThisRace += 1;
+  }
+  const mysteryGiftEarned = raceGiftEarned || streakGiftBonus > 0;
+  const nextMysteryGiftsReady =
+    profile.mysteryGiftsReady + giftsEarnedThisRace;
+
+  const totalCoinsEarned =
+    summary.coins.total + levelUpCoins + grandPrixBonusCoins;
+
+  const previousBadges = new Set(profile.badges);
 
   const updatedProfile: TeamProfile = {
     ...profile,
-    coins: profile.coins + summary.coins.total,
+    coins: profile.coins + totalCoinsEarned,
+    xp: nextXp,
+    practiceStreak: nextPracticeStreak,
+    lastPracticeDate: nextLastPracticeDate,
+    racesSinceGift: nextRacesSinceGift,
+    mysteryGiftsReady: nextMysteryGiftsReady,
     stats: {
       totalRaces: profile.stats.totalRaces + 1,
       wins: profile.stats.wins + (summary.result === 'win' ? 1 : 0),
       losses: profile.stats.losses + (summary.result === 'loss' ? 1 : 0),
       ties: profile.stats.ties + (summary.result === 'tie' ? 1 : 0),
       bossWins: profile.stats.bossWins + (isBossWin ? 1 : 0),
+      grandPrixWins: profile.stats.grandPrixWins + (isGrandPrixWin ? 1 : 0),
       totalQuestions:
         profile.stats.totalQuestions +
         summary.myState.correctCount +
@@ -289,7 +378,7 @@ export function recordRaceInSave(
         wrongCount: summary.myState.wrongCount,
         qpm: summary.qpm,
         bestStreak: summary.myState.bestStreak,
-        coinsEarned: summary.coins.total,
+        coinsEarned: totalCoinsEarned,
         myProgress: Number(summary.myState.progress.toFixed(2)),
         opponentProgress: Number(summary.opponentState.progress.toFixed(2)),
       },
@@ -300,6 +389,9 @@ export function recordRaceInSave(
   };
 
   updatedProfile.badges = evaluateBadges(updatedProfile);
+  const newlyUnlockedBadges = updatedProfile.badges.filter(
+    (id) => !previousBadges.has(id)
+  );
 
   const nextH2H = { ...save.headToHead };
   if (summary.mode !== 'coop-boss') {
@@ -313,7 +405,7 @@ export function recordRaceInSave(
     }
   }
 
-  return {
+  const nextSave: SaveData = {
     ...save,
     headToHead: nextH2H,
     profiles: {
@@ -321,6 +413,25 @@ export function recordRaceInSave(
       [team]: updatedProfile,
     },
   };
+
+  const enrichedSummary: RaceSummary = {
+    ...summary,
+    newlyUnlockedBadges,
+    xpEarned,
+    leveledUpTo,
+    levelUpCoins,
+    mysteryGiftEarned,
+    grandPrixBonusCoins,
+  };
+
+  return { nextSave, enrichedSummary };
+}
+
+export function recordRaceInSave(
+  save: SaveData,
+  summary: RaceSummary
+): SaveData {
+  return recordRaceWithProgression(save, summary).nextSave;
 }
 
 export function claimQuestReward(

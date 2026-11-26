@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   BarChart3,
   Bot,
   Check,
   Coins,
   Cpu,
+  Download,
   Pencil,
   ShoppingBag,
   Sparkles,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { SaveData, TeamId } from '../types';
 import { getTeamMeta } from '../data/shop';
+import { getLevelInfo } from '../engine/progression';
 
 interface HomeScreenProps {
   save: SaveData;
@@ -23,6 +25,12 @@ interface HomeScreenProps {
   onStartMultiplayer: () => void;
   onStartSolo: () => void;
   onStartCoopBoss: () => void;
+  onStartGrandPrix: () => void;
+  onOpenMysteryGift: (
+    team: TeamId
+  ) => { coinsWon: number; message: string } | null;
+  canInstallPwa: boolean;
+  onInstallPwa: () => void;
   onUpdateRacerName: (team: TeamId, name: string) => void;
   onClaimQuest: (team: TeamId, questId: string) => void;
   onOpenGarage: () => void;
@@ -37,12 +45,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onStartMultiplayer,
   onStartSolo,
   onStartCoopBoss,
+  onStartGrandPrix,
+  onOpenMysteryGift,
+  canInstallPwa,
+  onInstallPwa,
   onUpdateRacerName,
   onClaimQuest,
   onOpenGarage,
   onOpenStats,
   onToggleMute,
 }) => {
+  const [giftBanner, setGiftBanner] = useState<{
+    coinsWon: number;
+    message: string;
+  } | null>(null);
+  const giftTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (giftTimerRef.current !== null) {
+        window.clearTimeout(giftTimerRef.current);
+      }
+    };
+  }, []);
+
   const doggyProfile = save.profiles.doggy;
   const slothyProfile = save.profiles.slothy;
   const activeProfile = save.profiles[activeTeam];
@@ -50,12 +76,54 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const slothyMeta = getTeamMeta('slothy', slothyProfile.racerName);
   const activeMeta = getTeamMeta(activeTeam, activeProfile.racerName);
   const quests = activeProfile.dailyQuests?.quests ?? [];
+  const levelInfo = getLevelInfo(activeProfile.xp ?? 0);
+  const streakDays = activeProfile.practiceStreak ?? 0;
+  const giftsReady = activeProfile.mysteryGiftsReady ?? 0;
+
+  const handleOpenGift = () => {
+    const reward = onOpenMysteryGift(activeTeam);
+    if (!reward) return;
+    setGiftBanner(reward);
+    if (giftTimerRef.current !== null) {
+      window.clearTimeout(giftTimerRef.current);
+    }
+    giftTimerRef.current = window.setTimeout(() => {
+      setGiftBanner(null);
+      giftTimerRef.current = null;
+    }, 4000);
+  };
 
   return (
     <div className="screen home-screen">
       <div className="top-bar">
         <div className="brand-pill">🏁 Doggy vs. Slothy Speedway</div>
         <div className="top-bar-right">
+          {canInstallPwa && (
+            <button
+              type="button"
+              className="install-pwa-btn"
+              onClick={onInstallPwa}
+              title="Install Speedway as an app"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'linear-gradient(135deg, #2563eb, #4f46e5)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '999px',
+                padding: '6px 12px',
+                fontWeight: 900,
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                boxShadow: '0 3px 0 #1d4ed8',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Download size={15} />
+              <span>Install App</span>
+            </button>
+          )}
           <div className="coin-pill">
             <Coins size={18} />
             <span>{activeProfile.coins}</span>
@@ -185,6 +253,172 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             );
           })}
         </div>
+      </section>
+
+      {/* Racer Level, Streak & Mystery Gift Strip */}
+      <section
+        className="level-streak-strip"
+        style={{
+          background: '#ffffff',
+          borderRadius: '20px',
+          border: `3px solid ${activeMeta.border}`,
+          padding: '12px 16px',
+          boxShadow: '0 8px 20px rgba(15, 23, 42, 0.08)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px',
+          }}
+        >
+          <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                marginBottom: '6px',
+                fontSize: '0.92rem',
+                fontWeight: 900,
+                color: '#1e293b',
+              }}
+            >
+              <span>
+                ⭐ Level {levelInfo.level} • {levelInfo.title}
+              </span>
+              <span
+                style={{
+                  fontSize: '0.76rem',
+                  fontWeight: 800,
+                  color: '#64748b',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {levelInfo.xpInLevel}/{levelInfo.xpForNext} XP
+              </span>
+            </div>
+            <div
+              style={{
+                height: '10px',
+                background: '#e2e8f0',
+                borderRadius: '999px',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.min(100, Math.max(0, levelInfo.progressPct))}%`,
+                  height: '100%',
+                  borderRadius: '999px',
+                  background: `linear-gradient(90deg, ${activeMeta.primary}, ${activeMeta.secondary})`,
+                  transition: 'width 0.35s ease',
+                }}
+              />
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '8px',
+            }}
+          >
+            <span
+              className="streak-pill"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                background:
+                  streakDays > 0
+                    ? 'linear-gradient(135deg, #ffedd5, #fed7aa)'
+                    : '#f1f5f9',
+                color: streakDays > 0 ? '#c2410c' : '#64748b',
+                border:
+                  streakDays > 0
+                    ? '2px solid #fb923c'
+                    : '2px solid #cbd5e1',
+                borderRadius: '999px',
+                padding: '5px 12px',
+                fontWeight: 900,
+                fontSize: '0.82rem',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🔥 {streakDays}-Day Streak
+            </span>
+
+            {giftsReady > 0 && (
+              <button
+                type="button"
+                className="mystery-gift-btn"
+                onClick={handleOpenGift}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'linear-gradient(135deg, #ec4899, #a855f7, #f59e0b)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '999px',
+                  padding: '7px 14px',
+                  fontWeight: 900,
+                  fontSize: '0.84rem',
+                  cursor: 'pointer',
+                  boxShadow:
+                    '0 3px 0 #7e22ce, 0 0 16px rgba(236, 72, 153, 0.65)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                🎁 Open Mystery Gift! ({giftsReady})
+              </button>
+            )}
+          </div>
+        </div>
+
+        {giftBanner && (
+          <div
+            className="gift-reward-banner"
+            role="status"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px',
+              background: 'linear-gradient(135deg, #fef3c7, #fce7f3)',
+              border: '2px solid #f59e0b',
+              borderRadius: '14px',
+              padding: '9px 14px',
+              color: '#78350f',
+              fontWeight: 900,
+              fontSize: '0.9rem',
+            }}
+          >
+            <span>🎉 {giftBanner.message}</span>
+            <span
+              style={{
+                background: '#f59e0b',
+                color: '#ffffff',
+                borderRadius: '999px',
+                padding: '3px 10px',
+                fontSize: '0.82rem',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              +{giftBanner.coinsWon} 🪙
+            </span>
+          </div>
+        )}
       </section>
 
       {/* Daily Quests Panel */}
@@ -397,6 +631,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="btn-text">
             <strong>Co-Op vs. Mega-Bot!</strong>
             <span>Team up together (or solo) to beat the Math Boss!</span>
+          </div>
+        </button>
+
+        <button
+          className="arcade-btn arcade-btn--grand-prix"
+          onClick={onStartGrandPrix}
+          style={{
+            background: 'linear-gradient(135deg, #f59e0b, #eab308, #f97316)',
+            boxShadow: '0 5px 0 #b45309',
+          }}
+        >
+          <Trophy size={24} />
+          <div className="btn-text">
+            <strong>🏆 Grand Prix Cup</strong>
+            <span>3-race tournament across 3 tracks for a Mega Coin Jackpot!</span>
           </div>
         </button>
 

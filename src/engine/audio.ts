@@ -33,6 +33,8 @@ const N = {
   F5: 698.46,
   G5: 783.99,
   A5: 880.0,
+  B5: 987.77,
+  C6: 1046.5,
 };
 
 const RADIO_TRACKS: Record<string, RadioTrack> = {
@@ -119,6 +121,57 @@ const RADIO_TRACKS: Record<string, RadioTrack> = {
       N.A3, N.A4, N.A3, N.A4, N.A3, N.A4, N.E3, N.A3,
       N.F3, N.F4, N.F3, N.F4, N.C3, N.C4, N.C3, N.C4,
       N.G3, N.G4, N.G3, N.G4, N.G3, N.D3, N.C3, null,
+    ],
+  },
+  'radio-kawaii': {
+    bpm: 148,
+    leadType: 'sine',
+    bassType: 'triangle',
+    leadNotes: [
+      N.C5, N.E5, N.G5, null, N.A5, N.G5, N.E5, N.C5,
+      N.D5, N.F5, N.A5, null, N.G5, null, N.E5, null,
+      N.A5, N.G5, N.A5, N.C6, N.B5, N.A5, N.G5, N.E5,
+      N.F5, N.E5, N.D5, N.G5, N.C6, null, N.G5, null,
+    ],
+    bassNotes: [
+      N.C3, null, N.C4, null, N.G3, null, N.C4, null,
+      N.F3, null, N.F4, null, N.G3, null, N.D4, null,
+      N.A3, null, N.E4, null, N.F3, null, N.C4, null,
+      N.D3, null, N.G3, null, N.C3, null, N.G3, null,
+    ],
+  },
+  'radio-funk': {
+    bpm: 126,
+    leadType: 'square',
+    bassType: 'sawtooth',
+    leadNotes: [
+      N.C5, null, null, N.Eb4, null, N.G4, N.Bb4, null,
+      N.C5, null, N.Bb4, N.G4, null, N.F4, N.G4, null,
+      N.F5, null, null, N.Eb4, null, N.C5, N.Bb4, null,
+      N.G4, N.Bb4, N.C5, null, N.G4, null, N.C5, null,
+    ],
+    bassNotes: [
+      N.C3, null, N.C4, N.C3, null, N.G3, null, N.C3,
+      N.C3, null, N.Eb4, N.C3, null, N.G3, N.F3, null,
+      N.F3, null, N.F4, N.F3, null, N.C3, null, N.F3,
+      N.G3, null, N.G4, N.G3, N.F3, null, N.C3, null,
+    ],
+  },
+  'radio-hero': {
+    bpm: 138,
+    leadType: 'triangle',
+    bassType: 'sawtooth',
+    leadNotes: [
+      N.C5, null, N.G5, null, N.E5, N.F5, N.G5, null,
+      N.A5, null, N.G5, N.F5, N.E5, null, N.D5, null,
+      N.E5, N.G5, N.C6, null, N.B5, N.A5, N.G5, null,
+      N.F5, N.G5, N.A5, N.B5, N.C6, null, null, null,
+    ],
+    bassNotes: [
+      N.C3, N.C3, N.G3, N.C3, N.C3, N.C3, N.G3, N.E3,
+      N.F3, N.F3, N.C3, N.F3, N.G3, N.G3, N.D3, N.G3,
+      N.A3, N.A3, N.E3, N.A3, N.F3, N.F3, N.C3, N.F3,
+      N.G3, N.G3, N.D3, N.G3, N.C3, N.G3, N.C3, null,
     ],
   },
 };
@@ -271,6 +324,17 @@ class ArcadeAudio {
       this.playTone(659.25 * pitchBoost, 0.06, 'square', 0.09, 0.055);
       this.playTone(783.99 * pitchBoost, 0.08, 'square', 0.09, 0.11);
       this.playTone(1046.5 * pitchBoost, 0.11, 'square', 0.09, 0.165);
+    } else if (soundId === 'sound-fairy') {
+      // Sparkling magical harp/bell ascending chime notes!
+      this.playTone(783.99 * pitchBoost, 0.14, 'sine', 0.13, 0);
+      this.playTone(987.77 * pitchBoost, 0.14, 'triangle', 0.11, 0.045);
+      this.playTone(1174.66 * pitchBoost, 0.16, 'sine', 0.12, 0.09);
+      this.playTone(1567.98 * pitchBoost, 0.22, 'sine', 0.11, 0.135);
+    } else if (soundId === 'sound-dino') {
+      // Playful low prehistoric dino rumble-roar sweep!
+      this.playTone(95 * pitchBoost, 0.18, 'sawtooth', 0.13, 0, 235 * pitchBoost);
+      this.playTone(145 * pitchBoost, 0.2, 'triangle', 0.14, 0.04, 305 * pitchBoost);
+      this.playTone(280 * pitchBoost, 0.16, 'sawtooth', 0.09, 0.12, 165 * pitchBoost);
     } else {
       // Classic arcade chime + soft rev
       const base = 523.25 * pitchBoost;
@@ -289,6 +353,14 @@ class ArcadeAudio {
     } else if (soundId === 'sound-retro') {
       this.playTone(220, 0.1, 'square', 0.1, 0);
       this.playTone(165, 0.16, 'square', 0.1, 0.09);
+    } else if (soundId === 'sound-fairy') {
+      // Soft twangy downward sparkle!
+      this.playTone(698.46, 0.14, 'triangle', 0.11, 0, 440);
+      this.playTone(523.25, 0.18, 'sine', 0.11, 0.08, 293.66);
+    } else if (soundId === 'sound-dino') {
+      // Goofy dino stomp thud!
+      this.playTone(125, 0.16, 'triangle', 0.17, 0, 48);
+      this.playTone(95, 0.22, 'sine', 0.18, 0.11, 38);
     } else {
       this.playTone(260, 0.16, 'sawtooth', 0.13, 0, 140);
       this.playTone(190, 0.22, 'square', 0.08, 0.09, 110);

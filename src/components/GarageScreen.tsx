@@ -57,6 +57,10 @@ const TRACK_SWATCHES: Record<string, string[]> = {
   'track-beach': ['#22d3ee', '#06b6d4', '#fde68a', '#d97706', '#fb7185'],
   'track-snow': ['#e0f2fe', '#7dd3fc', '#38bdf8', '#15803d', '#ffffff'],
   'track-space': ['#1e1b4b', '#6366f1', '#ec4899', '#22d3ee', '#facc15'],
+  'track-coral': ['#0891b2', '#22d3ee', '#fb7185', '#f472b6', '#fde047'],
+  'track-forest': ['#166534', '#22c55e', '#84cc16', '#92400e', '#fef08a'],
+  'track-volcano': ['#1c1917', '#dc2626', '#f97316', '#facc15', '#44403c'],
+  'track-neon': ['#0f172a', '#d946ef', '#06b6d4', '#a855f7', '#22d3ee'],
 };
 
 const TRACK_ROAD_THEME: Record<
@@ -92,6 +96,30 @@ const TRACK_ROAD_THEME: Record<
     curbA: '#ec4899',
     curbB: '#22d3ee',
     dash: '#fde047',
+  },
+  'track-coral': {
+    road: '#164e63',
+    curbA: '#fb7185',
+    curbB: '#67e8f9',
+    dash: 'rgba(165, 243, 252, 0.78)',
+  },
+  'track-forest': {
+    road: '#3f2e21',
+    curbA: '#22c55e',
+    curbB: '#bef264',
+    dash: 'rgba(254, 240, 138, 0.72)',
+  },
+  'track-volcano': {
+    road: '#292524',
+    curbA: '#f97316',
+    curbB: '#facc15',
+    dash: 'rgba(251, 146, 60, 0.85)',
+  },
+  'track-neon': {
+    road: '#0f172a',
+    curbA: '#d946ef',
+    curbB: '#06b6d4',
+    dash: '#22d3ee',
   },
 };
 

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   EquippedLoadout,
   GameMode,
+  GrandPrixState,
   PeerMessage,
   PlayerMathConfig,
   RaceConfig,
@@ -17,8 +18,9 @@ import {
   claimQuestReward,
   loadSaveData,
   persistSaveData,
-  recordRaceInSave,
+  recordRaceWithProgression,
 } from './engine/storage';
+import { openMysteryGift } from './engine/progression';
 import { SpeedwayPeer } from './engine/peer';
 import { HomeScreen } from './components/HomeScreen';
 import { LobbyScreen } from './components/LobbyScreen';
@@ -28,6 +30,11 @@ import { GarageScreen } from './components/GarageScreen';
 import { StatsScreen } from './components/StatsScreen';
 
 type ScreenName = 'home' | 'lobby' | 'race' | 'podium' | 'garage' | 'stats';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
 const DEFAULT_MATH: PlayerMathConfig = {
   operation: 'multiplication',
@@ -44,11 +51,40 @@ const DEFAULT_RACE_CONFIG: RaceConfig = {
   sharedMath: true,
   fairRaceNoPerks: false,
   powerUpsEnabled: true,
+  grandPrixMode: false,
   trackId: 'track-sunny',
   hostMath: { ...DEFAULT_MATH },
   guestMath: { ...DEFAULT_MATH },
   cpuDifficulty: 'medium',
 };
+
+const GRAND_PRIX_CUPS: { name: string; tracks: string[] }[] = [
+  {
+    name: 'Sunshine Star Cup',
+    tracks: ['track-sunny', 'track-candy', 'track-beach'],
+  },
+  {
+    name: 'Magic Kingdom Cup',
+    tracks: ['track-forest', 'track-coral', 'track-space'],
+  },
+  {
+    name: 'Turbo Legends Cup',
+    tracks: ['track-snow', 'track-volcano', 'track-neon'],
+  },
+];
+
+function createGrandPrix(): GrandPrixState {
+  const cup =
+    GRAND_PRIX_CUPS[Math.floor(Math.random() * GRAND_PRIX_CUPS.length)];
+  return {
+    active: true,
+    cupName: cup.name,
+    tracks: cup.tracks,
+    raceIndex: 0,
+    myPoints: 0,
+    opponentPoints: 0,
+  };
+}
 
 export const App: React.FC = () => {
   const [save, setSave] = useState<SaveData>(() => {
@@ -61,9 +97,30 @@ export const App: React.FC = () => {
   const [activeTeam, setActiveTeam] = useState<TeamId>('doggy');
   const [mode, setMode] = useState<GameMode>('solo');
   const [raceConfig, setRaceConfig] = useState<RaceConfig>(DEFAULT_RACE_CONFIG);
+  const [grandPrix, setGrandPrix] = useState<GrandPrixState | null>(null);
   const [raceKey, setRaceKey] = useState(0);
 
-  // Multiplayer state
+  // PWA Install Prompt
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallPwa = async () => {
+    if (!deferredPrompt) return;
+    await deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    setDeferredPrompt(null);
+  };
+
+  // Multiplayer & Emote state
   const peerRef = useRef<SpeedwayPeer | null>(null);
   const [mpRole, setMpRole] = useState<'none' | 'host' | 'guest'>('none');
   const [roomCode, setRoomCode] = useState('');
@@ -76,6 +133,11 @@ export const App: React.FC = () => {
   const [remoteOpponentState, setRemoteOpponentState] =
     useState<RacerLiveState | null>(null);
 
+  const [myEmote, setMyEmote] = useState<string | null>(null);
+  const [opponentEmote, setOpponentEmote] = useState<string | null>(null);
+  const myEmoteTimerRef = useRef<number | null>(null);
+  const oppEmoteTimerRef = useRef<number | null>(null);
+
   // Post-race state
   const [lastSummary, setLastSummary] = useState<RaceSummary | null>(null);
   const [rematchStatus, setRematchStatus] = useState<string | null>(null);
@@ -84,12 +146,14 @@ export const App: React.FC = () => {
 
   const activeTeamRef = useRef(activeTeam);
   const raceConfigRef = useRef(raceConfig);
+  const grandPrixRef = useRef(grandPrix);
   const saveRef = useRef(save);
   const modeRef = useRef(mode);
   const oppLoadoutRef = useRef(opponentLoadout);
 
   activeTeamRef.current = activeTeam;
   raceConfigRef.current = raceConfig;
+  grandPrixRef.current = grandPrix;
   saveRef.current = save;
   modeRef.current = mode;
   oppLoadoutRef.current = opponentLoadout;
@@ -110,6 +174,7 @@ export const App: React.FC = () => {
     setRemoteOpponentName('');
     setRemoteOpponentState(null);
     setRematchStatus(null);
+    setGrandPrix(null);
     peerRequestedRematchRef.current = false;
     iRequestedRematchRef.current = false;
   }, []);
@@ -120,30 +185,89 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const launchRace = useCallback((cfg: RaceConfig, nextMode?: GameMode) => {
-    if (nextMode) setMode(nextMode);
-    const oppTeam: TeamId = activeTeamRef.current === 'doggy' ? 'slothy' : 'doggy';
-    setRaceConfig(cfg);
-    setRemoteOpponentState({
-      team: oppTeam,
-      progress: 0,
-      correctCount: 0,
-      wrongCount: 0,
-      streak: 0,
-      bestStreak: 0,
-      turboUntil: 0,
-      spinoutUntil: 0,
-      shieldActive: false,
-      finished: false,
-      finishTimeMs: null,
-      loadout: oppLoadoutRef.current,
-    });
-    setRematchStatus(null);
-    peerRequestedRematchRef.current = false;
-    iRequestedRematchRef.current = false;
-    setRaceKey((k) => k + 1);
-    setScreen('race');
+  const showMyEmote = useCallback((em: string) => {
+    setMyEmote(em);
+    if (myEmoteTimerRef.current) window.clearTimeout(myEmoteTimerRef.current);
+    myEmoteTimerRef.current = window.setTimeout(() => setMyEmote(null), 2600);
   }, []);
+
+  const showOppEmote = useCallback((em: string) => {
+    setOpponentEmote(em);
+    if (oppEmoteTimerRef.current) window.clearTimeout(oppEmoteTimerRef.current);
+    oppEmoteTimerRef.current = window.setTimeout(() => setOpponentEmote(null), 2600);
+  }, []);
+
+  const handleSendEmote = useCallback(
+    (emote: string) => {
+      arcadeAudio.playCoin();
+      showMyEmote(emote);
+      if (peerRef.current?.isConnected()) {
+        peerRef.current.send({ type: 'emote', emote });
+      }
+    },
+    [showMyEmote]
+  );
+
+  const launchRace = useCallback(
+    (
+      cfg: RaceConfig,
+      nextMode?: GameMode,
+      nextGp?: GrandPrixState | null
+    ) => {
+      if (nextMode) setMode(nextMode);
+      const activeGp = nextGp !== undefined ? nextGp : grandPrixRef.current;
+      if (nextGp !== undefined) setGrandPrix(nextGp);
+
+      const effectiveTrackId =
+        activeGp && activeGp.active
+          ? activeGp.tracks[activeGp.raceIndex] ?? cfg.trackId
+          : cfg.trackId;
+
+      const finalCfg: RaceConfig = {
+        ...cfg,
+        trackId: effectiveTrackId,
+      };
+
+      const oppTeam: TeamId =
+        activeTeamRef.current === 'doggy' ? 'slothy' : 'doggy';
+      setRaceConfig(finalCfg);
+      setRemoteOpponentState({
+        team: oppTeam,
+        progress: 0,
+        correctCount: 0,
+        wrongCount: 0,
+        streak: 0,
+        bestStreak: 0,
+        turboUntil: 0,
+        spinoutUntil: 0,
+        shieldActive: false,
+        finished: false,
+        finishTimeMs: null,
+        loadout: oppLoadoutRef.current,
+      });
+      setRematchStatus(null);
+      peerRequestedRematchRef.current = false;
+      iRequestedRematchRef.current = false;
+      setRaceKey((k) => k + 1);
+      setScreen('race');
+    },
+    []
+  );
+
+  const advanceNextRaceOrRematch = useCallback(() => {
+    const gp = grandPrixRef.current;
+    if (gp && gp.active && gp.raceIndex < 2) {
+      const nextGp: GrandPrixState = {
+        ...gp,
+        raceIndex: gp.raceIndex + 1,
+      };
+      launchRace(raceConfigRef.current, undefined, nextGp);
+    } else if (raceConfigRef.current.grandPrixMode) {
+      launchRace(raceConfigRef.current, undefined, createGrandPrix());
+    } else {
+      launchRace(raceConfigRef.current, undefined, null);
+    }
+  }, [launchRace]);
 
   const handlePeerMessage = useCallback(
     (msg: PeerMessage) => {
@@ -177,7 +301,7 @@ export const App: React.FC = () => {
           guestMath: msg.guestMath,
         }));
       } else if (msg.type === 'start-race') {
-        launchRace(msg.config, msg.mode);
+        launchRace(msg.config, msg.mode, msg.grandPrix ?? null);
       } else if (msg.type === 'progress') {
         const oppTeam: TeamId =
           activeTeamRef.current === 'doggy' ? 'slothy' : 'doggy';
@@ -195,19 +319,22 @@ export const App: React.FC = () => {
           finishTimeMs: msg.finishTimeMs,
           loadout: oppLoadoutRef.current,
         }));
+      } else if (msg.type === 'emote') {
+        arcadeAudio.playCoin();
+        showOppEmote(msg.emote);
       } else if (msg.type === 'rematch-request') {
         peerRequestedRematchRef.current = true;
         if (iRequestedRematchRef.current) {
           peerRef.current?.send({ type: 'rematch-accept' });
-          launchRace(raceConfigRef.current);
+          advanceNextRaceOrRematch();
         } else {
-          setRematchStatus('Your sister wants a REMATCH! Tap "Race Again!" 🏁');
+          setRematchStatus('Your sister is ready for the next race! Tap below 🏁');
         }
       } else if (msg.type === 'rematch-accept') {
-        launchRace(raceConfigRef.current);
+        advanceNextRaceOrRematch();
       }
     },
-    [launchRace]
+    [advanceNextRaceOrRematch, launchRace, showOppEmote]
   );
 
   const initPeer = useCallback(() => {
@@ -294,15 +421,17 @@ export const App: React.FC = () => {
   };
 
   const handleStartRace = () => {
+    const nextGp = raceConfig.grandPrixMode ? createGrandPrix() : null;
     if (mpRole === 'host' && peerConnected) {
       peerRef.current?.send({
         type: 'start-race',
         mode,
         startAt: Date.now(),
         config: raceConfig,
+        grandPrix: nextGp,
       });
     }
-    launchRace(raceConfig);
+    launchRace(raceConfig, undefined, nextGp);
   };
 
   const handleSendProgress = useCallback((st: RacerLiveState) => {
@@ -323,33 +452,44 @@ export const App: React.FC = () => {
   }, []);
 
   const handleRaceFinish = useCallback((summary: RaceSummary) => {
-    const prevBadges = new Set(saveRef.current.profiles[summary.myTeam].badges);
-    const updated = recordRaceInSave(saveRef.current, summary);
-    const newlyUnlocked = updated.profiles[summary.myTeam].badges.filter(
-      (b) => !prevBadges.has(b)
-    );
-    setSave(updated);
-    setLastSummary({
+    let updatedGp = grandPrixRef.current;
+    if (updatedGp && updatedGp.active) {
+      const myAdd = summary.result === 'win' ? 10 : summary.result === 'tie' ? 8 : 7;
+      const oppAdd = summary.result === 'loss' ? 10 : summary.result === 'tie' ? 8 : 7;
+      updatedGp = {
+        ...updatedGp,
+        myPoints: updatedGp.myPoints + myAdd,
+        opponentPoints: updatedGp.opponentPoints + oppAdd,
+      };
+      setGrandPrix(updatedGp);
+    }
+
+    const summaryWithGp: RaceSummary = {
       ...summary,
-      newlyUnlockedBadges: newlyUnlocked,
-    });
+      grandPrix: updatedGp,
+    };
+
+    const { nextSave, enrichedSummary } = recordRaceWithProgression(
+      saveRef.current,
+      summaryWithGp
+    );
+    setSave(nextSave);
+    setLastSummary(enrichedSummary);
     setScreen('podium');
   }, []);
 
   const handleRematch = () => {
     if (!peerRef.current?.isConnected()) {
-      launchRace(raceConfig);
+      advanceNextRaceOrRematch();
       return;
     }
     iRequestedRematchRef.current = true;
     if (peerRequestedRematchRef.current) {
       peerRef.current.send({ type: 'rematch-accept' });
-      launchRace(raceConfig);
+      advanceNextRaceOrRematch();
     } else {
       peerRef.current.send({ type: 'rematch-request' });
-      setRematchStatus(
-        'Rematch requested! Waiting for your sister to tap Race Again...'
-      );
+      setRematchStatus('Ready! Waiting for your sister to tap Next Race...');
     }
   };
 
@@ -430,15 +570,25 @@ export const App: React.FC = () => {
     setSave((prev) => claimQuestReward(prev, team, questId));
   };
 
+  const handleOpenMysteryGift = (team: TeamId) => {
+    const prof = save.profiles[team];
+    if (prof.mysteryGiftsReady <= 0) return null;
+    arcadeAudio.playVictory('cel-champion');
+    const res = openMysteryGift(save, team);
+    setSave(res.nextSave);
+    return { coinsWon: res.coinsWon, message: res.message };
+  };
+
   const handleToggleMute = () => {
     setSave((prev) => ({ ...prev, soundMuted: !prev.soundMuted }));
   };
 
-  const openLobby = (nextMode: GameMode) => {
+  const openLobby = (nextMode: GameMode, isGrandPrix = false) => {
     cleanupPeer();
     setMode(nextMode);
     setRaceConfig((prev) => ({
       ...prev,
+      grandPrixMode: isGrandPrix,
       trackId: save.profiles[activeTeam].equipped.trackId || 'track-sunny',
     }));
     setScreen('lobby');
@@ -466,12 +616,16 @@ export const App: React.FC = () => {
           onSelectTeam={setActiveTeam}
           onUpdateRacerName={handleUpdateRacerName}
           onClaimQuest={handleClaimQuest}
-          onStartMultiplayer={() => openLobby('multiplayer')}
-          onStartSolo={() => openLobby('solo')}
-          onStartCoopBoss={() => openLobby('coop-boss')}
+          onOpenMysteryGift={handleOpenMysteryGift}
+          onStartMultiplayer={() => openLobby('multiplayer', false)}
+          onStartSolo={() => openLobby('solo', false)}
+          onStartCoopBoss={() => openLobby('coop-boss', false)}
+          onStartGrandPrix={() => openLobby('solo', true)}
           onOpenGarage={() => setScreen('garage')}
           onOpenStats={() => setScreen('stats')}
           onToggleMute={handleToggleMute}
+          canInstallPwa={Boolean(deferredPrompt)}
+          onInstallPwa={handleInstallPwa}
         />
       )}
 
@@ -511,12 +665,16 @@ export const App: React.FC = () => {
           missedFactCounts={save.profiles[activeTeam].missedFactCounts}
           opponentLoadout={effectiveOpponentLoadout}
           config={raceConfig}
+          grandPrix={grandPrix}
           myMathConfig={myMathConfig}
           remoteOpponentState={remoteOpponentState}
           peerConnected={peerConnected}
+          myEmote={myEmote}
+          opponentEmote={opponentEmote}
           soundMuted={save.soundMuted}
           onToggleMute={handleToggleMute}
           onChangeRadio={(radioId) => handleEquipItem('radio', radioId)}
+          onSendEmote={handleSendEmote}
           onSendProgress={handleSendProgress}
           onRaceFinish={handleRaceFinish}
           onQuit={() => {
@@ -535,6 +693,9 @@ export const App: React.FC = () => {
           headToHead={save.headToHead}
           totalCoins={save.profiles[activeTeam].coins}
           rematchStatus={rematchStatus}
+          peerConnected={peerConnected}
+          opponentEmote={opponentEmote}
+          onSendEmote={handleSendEmote}
           onRematch={handleRematch}
           onOpenGarage={() => {
             cleanupPeer();

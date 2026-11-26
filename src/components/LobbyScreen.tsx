@@ -411,26 +411,66 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
               </div>
             )}
 
-            <div className="field-group">
-              <label>
-                <Map size={13} /> Speedway Track
+            <div className="toggle-list" style={{ marginBottom: '12px' }}>
+              <label className="toggle-row">
+                <div>
+                  <strong>🏆 Grand Prix Cup (3-Race Tourney)</strong>
+                  <small>3-track championship tournament mode</small>
+                </div>
+                <input
+                  type="checkbox"
+                  disabled={isGuest}
+                  checked={Boolean(config.grandPrixMode)}
+                  onChange={(e) =>
+                    onChangeConfig({
+                      ...config,
+                      grandPrixMode: e.target.checked,
+                    })
+                  }
+                />
               </label>
-              <div className="pill-row">
-                {unlockedTracks.map((tr) => (
-                  <button
-                    key={tr.id}
-                    type="button"
-                    disabled={isGuest}
-                    className={`pill-btn ${
-                      config.trackId === tr.id ? 'active' : ''
-                    }`}
-                    onClick={() => onChangeConfig({ ...config, trackId: tr.id })}
-                  >
-                    {tr.name.replace(' Speedway', '').replace(' Circuit', '')}
-                  </button>
-                ))}
-              </div>
             </div>
+
+            {config.grandPrixMode ? (
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #fffbeb, #fef3c7)',
+                  border: '2px solid #f59e0b',
+                  borderRadius: '14px',
+                  padding: '10px 12px',
+                  marginBottom: '12px',
+                  fontSize: '0.84rem',
+                  fontWeight: 800,
+                  color: '#92400e',
+                }}
+              >
+                🏆 Race 3 tracks in a row! Most points wins the Cup &amp; +75
+                bonus Speed Coins!
+              </div>
+            ) : (
+              <div className="field-group">
+                <label>
+                  <Map size={13} /> Speedway Track
+                </label>
+                <div className="pill-row">
+                  {unlockedTracks.map((tr) => (
+                    <button
+                      key={tr.id}
+                      type="button"
+                      disabled={isGuest}
+                      className={`pill-btn ${
+                        config.trackId === tr.id ? 'active' : ''
+                      }`}
+                      onClick={() =>
+                        onChangeConfig({ ...config, trackId: tr.id })
+                      }
+                    >
+                      {tr.name.replace(' Speedway', '').replace(' Circuit', '')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {(mode === 'solo' || mode === 'coop-boss') && (
               <div className="field-group">

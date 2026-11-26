@@ -4,9 +4,11 @@ import {
   CheckCircle2,
   Coins,
   Flame,
+  Gift,
   Home,
   RotateCcw,
   ShoppingBag,
+  Sparkles,
   Trophy,
   Zap,
 } from 'lucide-react';
@@ -25,6 +27,9 @@ interface PodiumScreenProps {
   headToHead: HeadToHeadRecord;
   totalCoins: number;
   rematchStatus: string | null;
+  peerConnected: boolean;
+  opponentEmote: string | null;
+  onSendEmote: (emote: string) => void;
   onRematch: () => void;
   onOpenGarage: () => void;
   onGoHome: () => void;
@@ -37,11 +42,19 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
   headToHead,
   totalCoins,
   rematchStatus,
+  peerConnected,
+  opponentEmote,
+  onSendEmote,
   onRematch,
   onOpenGarage,
   onGoHome,
 }) => {
   const isBoss = summary.mode === 'coop-boss';
+  const gp = summary.grandPrix;
+  const gpHasNextRace = Boolean(gp && gp.active && gp.raceIndex < 2);
+  const gpFinished = Boolean(gp && gp.active && gp.raceIndex >= 2);
+  const gpWon = Boolean(gpFinished && gp && gp.myPoints >= gp.opponentPoints);
+
   const winnerTeam =
     isBoss || summary.result === 'win' || summary.result === 'tie'
       ? summary.myTeam
@@ -62,7 +75,11 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
     return runCelebrationAnimation(celebrationId, winnerTeam);
   }, [celebrationId, isBoss, summary.result, winnerTeam]);
 
-  const titleText = isBoss
+  const titleText = gpFinished
+    ? gpWon
+      ? `🏆 GRAND PRIX CUP CHAMPION!`
+      : `🏆 GRAND PRIX CUP COMPLETE!`
+    : isBoss
     ? summary.result === 'win'
       ? 'DOGGY & SLOTHY BEAT MEGA-BOT! 🤖💥'
       : 'MEGA-BOT 3000 WON THIS ROUND!'
@@ -72,7 +89,11 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
     ? 'PHOTO FINISH TIE! 🤝'
     : `${winnerMeta.name} Took 1st Place!`;
 
-  const subtitleText = isBoss
+  const subtitleText = gpHasNextRace && gp
+    ? `Race ${gp.raceIndex + 1} of 3 complete! Get ready for the next track!`
+    : gpFinished && gpWon
+    ? `You conquered all 3 Grand Prix tracks and won the +75 🪙 Cup Jackpot!`
+    : isBoss
     ? summary.result === 'win'
       ? 'Unstoppable sister teamwork! Mega-Bot 3000 is no match for your math!'
       : 'So close! Team up again and blast past Mega-Bot next race!'
@@ -104,12 +125,58 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
         <div className="podium-title-wrap">
           <div className="podium-badge">
             <Trophy size={16} />{' '}
-            {isBoss ? '🤖 CO-OP BOSS BATTLE' : celInfo.banner}
+            {gp?.active
+              ? `🏆 ${gp.cupName} • RACE ${gp.raceIndex + 1}/3`
+              : isBoss
+              ? '🤖 CO-OP BOSS BATTLE'
+              : celInfo.banner}
           </div>
           <h1>{titleText}</h1>
           <p>{subtitleText}</p>
         </div>
       </div>
+
+      {/* Grand Prix Cup Standings */}
+      {gp?.active && (
+        <div className="gp-standings-card">
+          <div className="gp-standings-head">
+            <strong>🏆 {gp.cupName} Standings</strong>
+            <span>Race {gp.raceIndex + 1} of 3</span>
+          </div>
+          <div className="gp-scores-row">
+            <div className="gp-score-box">
+              <span>You</span>
+              <strong>{gp.myPoints} pts</strong>
+            </div>
+            <span className="gp-vs">VS</span>
+            <div className="gp-score-box">
+              <span>{isBoss ? 'Mega-Bot' : 'Opponent'}</span>
+              <strong>{gp.opponentPoints} pts</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* XP Level-Up & Mystery Gift Banners */}
+      {(summary.leveledUpTo || summary.mysteryGiftEarned || (summary.xpEarned ?? 0) > 0) && (
+        <div className="progression-strip">
+          {(summary.xpEarned ?? 0) > 0 && (
+            <span className="xp-earned-pill">
+              <Sparkles size={15} /> +{summary.xpEarned} XP
+            </span>
+          )}
+          {summary.leveledUpTo && (
+            <span className="levelup-pill">
+              ⭐ LEVEL UP! Level {summary.leveledUpTo} (+{summary.levelUpCoins ?? 50} 🪙)
+            </span>
+          )}
+          {summary.mysteryGiftEarned && (
+            <span className="gift-earned-pill">
+              <Gift size={15} /> Mystery Gift Box Ready on Home!
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Newly Unlocked Badges Banner */}
       {newBadges.length > 0 && (
@@ -125,6 +192,28 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Quick Cheer / Emotes in 2-Player */}
+      {peerConnected && (
+        <div className="podium-emotes-bar">
+          <span>Cheer your sister:</span>
+          {['Good Race! 🏁', 'So Fast! ⚡', 'Awesome! 🌟', 'Rematch! 🔥'].map(
+            (em) => (
+              <button
+                key={em}
+                type="button"
+                className="emote-chip-btn"
+                onClick={() => onSendEmote(em)}
+              >
+                {em}
+              </button>
+            )
+          )}
+          {opponentEmote && (
+            <span className="opp-emote-bubble">Sister: {opponentEmote}</span>
+          )}
         </div>
       )}
 
@@ -179,7 +268,13 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
             <h3>
               <Coins size={20} /> Speed Coins Earned
             </h3>
-            <span className="coins-total-badge">+{summary.coins.total} 🪙</span>
+            <span className="coins-total-badge">
+              +
+              {summary.coins.total +
+                (summary.levelUpCoins ?? 0) +
+                (summary.grandPrixBonusCoins ?? 0)}{' '}
+              🪙
+            </span>
           </div>
           <ul className="coin-lines">
             <li>
@@ -218,6 +313,18 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
                 <strong>+{summary.coins.perkMultiplierBonus}</strong>
               </li>
             )}
+            {(summary.levelUpCoins ?? 0) > 0 && (
+              <li className="coin-line-perk">
+                <span>Level Up Milestone Chest! ⭐</span>
+                <strong>+{summary.levelUpCoins}</strong>
+              </li>
+            )}
+            {(summary.grandPrixBonusCoins ?? 0) > 0 && (
+              <li className="coin-line-perk">
+                <span>Grand Prix Cup Jackpot! 🏆</span>
+                <strong>+{summary.grandPrixBonusCoins}</strong>
+              </li>
+            )}
           </ul>
           <div className="coins-bank-line">
             Bank Balance: <strong>🪙 {totalCoins} Speed Coins</strong>
@@ -249,7 +356,10 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
       {/* Action Buttons */}
       <div className="podium-actions">
         <button className="arcade-btn arcade-btn--start" onClick={onRematch}>
-          <RotateCcw size={22} /> Race Again!
+          <RotateCcw size={22} />{' '}
+          {gpHasNextRace && gp
+            ? `NEXT CUP RACE! (Race ${gp.raceIndex + 2} of 3) 🏁`
+            : 'Race Again!'}
         </button>
         <button className="arcade-btn arcade-btn--gold" onClick={onOpenGarage}>
           <ShoppingBag size={20} /> Garage Shop ({totalCoins} 🪙)

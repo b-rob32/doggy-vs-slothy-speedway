@@ -3,6 +3,7 @@ import { Delete, Flame, Radio, Shield, Sparkles, Volume2, VolumeX, X } from 'luc
 import {
   EquippedLoadout,
   GameMode,
+  GrandPrixState,
   MathProblem,
   MissedQuestion,
   OperationStat,
@@ -30,12 +31,16 @@ interface RaceScreenProps {
   missedFactCounts: Record<string, number>;
   opponentLoadout: EquippedLoadout;
   config: RaceConfig;
+  grandPrix?: GrandPrixState | null;
   myMathConfig: PlayerMathConfig;
   remoteOpponentState: RacerLiveState | null;
   peerConnected: boolean;
+  myEmote?: string | null;
+  opponentEmote?: string | null;
   soundMuted: boolean;
   onToggleMute: () => void;
   onChangeRadio: (radioId: string) => void;
+  onSendEmote: (emote: string) => void;
   onSendProgress: (state: RacerLiveState) => void;
   onRaceFinish: (summary: RaceSummary) => void;
   onQuit: () => void;
@@ -80,12 +85,16 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
   missedFactCounts,
   opponentLoadout,
   config,
+  grandPrix,
   myMathConfig,
   remoteOpponentState,
   peerConnected,
+  myEmote,
+  opponentEmote,
   soundMuted,
   onToggleMute,
   onChangeRadio,
+  onSendEmote,
   onSendProgress,
   onRaceFinish,
   onQuit,
@@ -774,6 +783,11 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
           <div className="hud-pill hud-pill--lap">
             {totalLaps ? `LAP ${currentLap} / ${totalLaps}` : `⏱️ ${timeLeftSec}s`}
           </div>
+          {grandPrix?.active && (
+            <div className="hud-pill hud-pill--gp">
+              🏆 CUP {grandPrix.raceIndex + 1}/3
+            </div>
+          )}
           <div
             className={`hud-pill ${isLeading ? 'hud-pill--lead' : 'hud-pill--chase'}`}
           >
@@ -894,6 +908,8 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
           turboBannerTeam={turboBannerTeam}
           trackId={config.trackId}
           bossProgress={isBossMode ? bossProgress : null}
+          myEmote={myEmote}
+          opponentEmote={opponentEmote}
         />
 
         {countdown >= 0 && (
@@ -903,6 +919,25 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Quick-Tap Live Cheer / Emote Bar */}
+      <div className="race-emotes-bar">
+        {[
+          myTeam === 'doggy' ? 'Woof! 🐾' : 'Zoom! 🦥',
+          'So Fast! ⚡',
+          'Nice! 🌟',
+          'Go Go Go! 🏁',
+        ].map((em) => (
+          <button
+            key={em}
+            type="button"
+            className="emote-chip-btn"
+            onClick={() => onSendEmote(em)}
+          >
+            {em}
+          </button>
+        ))}
       </div>
 
       {/* Held Mario-Kart Power-Up Banner */}

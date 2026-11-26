@@ -1,7 +1,7 @@
 import { EquippedLoadout, ShopItem, ShopPerks, TeamId } from '../types';
 
 export const SHOP_ITEMS: ShopItem[] = [
-  // ================= CARS =================
+  // ================= CARS (11) =================
   {
     id: 'car-starter',
     category: 'car',
@@ -22,6 +22,16 @@ export const SHOP_ITEMS: ShopItem[] = [
     accentColor: '#facc15',
   },
   {
+    id: 'car-bubblegum',
+    category: 'car',
+    name: 'Bubblegum Hovercraft',
+    description: 'Bouncy pink-and-aqua hover racer that glides over bumps!',
+    perkLabel: '20% Faster Recovery',
+    price: 160,
+    perks: { spinoutReduction: 0.2 },
+    accentColor: '#f472b6',
+  },
+  {
     id: 'car-monster',
     category: 'car',
     name: 'Off-Road Crusher',
@@ -30,6 +40,16 @@ export const SHOP_ITEMS: ShopItem[] = [
     price: 200,
     perks: { spinoutReduction: 0.25 },
     accentColor: '#a855f7',
+  },
+  {
+    id: 'car-dino',
+    category: 'car',
+    name: 'Dino Chomp Buggy',
+    description: 'Roaring T-Rex speedster with spiky emerald scales!',
+    perkLabel: '+7% Speed & 15% Recovery',
+    price: 260,
+    perks: { speedBonus: 0.07, spinoutReduction: 0.15 },
+    accentColor: '#22c55e',
   },
   {
     id: 'car-rocket',
@@ -42,6 +62,26 @@ export const SHOP_ITEMS: ShopItem[] = [
     accentColor: '#f97316',
   },
   {
+    id: 'car-unicorn',
+    category: 'car',
+    name: 'Unicorn Sparkle Cruiser',
+    description: 'Pastel pearlescent unicorn car with shimmering rainbow wings!',
+    perkLabel: '+20% Turbo & +10% Coins',
+    price: 380,
+    perks: { turboBonus: 0.2, coinMultiplier: 0.1 },
+    accentColor: '#e879f9',
+  },
+  {
+    id: 'car-ninja',
+    category: 'car',
+    name: 'Ninja Shadow Racer',
+    description: 'Stealth midnight speedster with neon cyan trim!',
+    perkLabel: '+9% Distance per Answer',
+    price: 440,
+    perks: { speedBonus: 0.09 },
+    accentColor: '#06b6d4',
+  },
+  {
     id: 'car-champion',
     category: 'car',
     name: 'Golden Champion',
@@ -51,8 +91,28 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: { speedBonus: 0.05, coinMultiplier: 0.15 },
     accentColor: '#eab308',
   },
+  {
+    id: 'car-royal',
+    category: 'car',
+    name: 'Royal Princess Carriage',
+    description: 'Sparkling lavender & gold royal cruiser with jeweled trim!',
+    perkLabel: '+25% Coins & 20% Recovery',
+    price: 580,
+    perks: { coinMultiplier: 0.25, spinoutReduction: 0.2 },
+    accentColor: '#c084fc',
+  },
+  {
+    id: 'car-ufo',
+    category: 'car',
+    name: 'Galaxy UFO Saucer',
+    description: 'Hovering alien flying saucer with glowing plasma ring!',
+    perkLabel: '+10% Speed & +25% Turbo',
+    price: 650,
+    perks: { speedBonus: 0.1, turboBonus: 0.25 },
+    accentColor: '#38bdf8',
+  },
 
-  // ================= PERFORMANCE GEAR =================
+  // ================= PERFORMANCE GEAR (7) =================
   {
     id: 'gear-stock',
     category: 'gear',
@@ -102,8 +162,28 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: { speedBonus: 0.1 },
     accentColor: '#ef4444',
   },
+  {
+    id: 'gear-nitro',
+    category: 'gear',
+    name: 'Hyper Nitro Core',
+    description: 'Supercharges every Turbo Boost with explosive rocket power!',
+    perkLabel: '+35% Turbo Power',
+    price: 340,
+    perks: { turboBonus: 0.35 },
+    accentColor: '#fb923c',
+  },
+  {
+    id: 'gear-master',
+    category: 'gear',
+    name: 'Grandmaster Pro Kit',
+    description: 'The ultimate racing tuning package for Speedway Legends!',
+    perkLabel: '+8% Speed & +25% Coins',
+    price: 480,
+    perks: { speedBonus: 0.08, coinMultiplier: 0.25 },
+    accentColor: '#eab308',
+  },
 
-  // ================= DRIVER ACCESSORIES =================
+  // ================= DRIVER STYLE / ACCESSORIES (13) =================
   {
     id: 'acc-none',
     category: 'accessory',
@@ -114,12 +194,30 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: {},
   },
   {
+    id: 'acc-bow',
+    category: 'accessory',
+    name: 'Cute Pink Bow',
+    description: 'Polka-dot satin bow perched right on top!',
+    perkLabel: 'Style + 5% Bonus Coins',
+    price: 60,
+    perks: { coinMultiplier: 0.05 },
+  },
+  {
     id: 'acc-goggles',
     category: 'accessory',
     name: 'Aviator Goggles',
     description: 'Shiny gold wind-proof goggles for high-speed zooms!',
     perkLabel: 'Style + 5% Bonus Coins',
     price: 80,
+    perks: { coinMultiplier: 0.05 },
+  },
+  {
+    id: 'acc-party',
+    category: 'accessory',
+    name: 'Birthday Party Hat',
+    description: 'Festive striped cone hat with a fluffy pom-pom!',
+    perkLabel: 'Style + 5% Bonus Coins',
+    price: 90,
     perks: { coinMultiplier: 0.05 },
   },
   {
@@ -132,6 +230,24 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: { coinMultiplier: 0.05 },
   },
   {
+    id: 'acc-cat',
+    category: 'accessory',
+    name: 'Cute Cat Ears',
+    description: 'Adorable sparkly kitty-cat headband ears!',
+    perkLabel: 'Style + 8% Bonus Coins',
+    price: 120,
+    perks: { coinMultiplier: 0.08 },
+  },
+  {
+    id: 'acc-flower',
+    category: 'accessory',
+    name: 'Flower Crown',
+    description: 'Colorful springtime daisies & blossoms halo!',
+    perkLabel: 'Style + 8% Bonus Coins',
+    price: 140,
+    perks: { coinMultiplier: 0.08 },
+  },
+  {
     id: 'acc-helmet',
     category: 'accessory',
     name: 'Pro Racing Helmet',
@@ -141,16 +257,52 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: { spinoutReduction: 0.1 },
   },
   {
+    id: 'acc-cowboy',
+    category: 'accessory',
+    name: 'Speedway Cowboy Hat',
+    description: 'Yeehaw! Tan western hat with a golden sheriff star!',
+    perkLabel: 'Style + 10% Recovery',
+    price: 170,
+    perks: { spinoutReduction: 0.1 },
+  },
+  {
+    id: 'acc-pirate',
+    category: 'accessory',
+    name: 'Captain Pirate Hat',
+    description: 'Ahoy! Classic captain hat ready to hunt Speed Coins!',
+    perkLabel: 'Style + 12% Bonus Coins',
+    price: 200,
+    perks: { coinMultiplier: 0.12 },
+  },
+  {
+    id: 'acc-unicorn',
+    category: 'accessory',
+    name: 'Sparkle Unicorn Horn',
+    description: 'Magical golden spiral horn with pastel rainbow ears!',
+    perkLabel: 'Style + 12% Bonus Coins',
+    price: 240,
+    perks: { coinMultiplier: 0.12 },
+  },
+  {
+    id: 'acc-wizard',
+    category: 'accessory',
+    name: 'Starry Wizard Hat',
+    description: 'Mystical midnight-blue math-wizard hat covered in gold stars!',
+    perkLabel: 'Style + 12% Recovery',
+    price: 260,
+    perks: { spinoutReduction: 0.12 },
+  },
+  {
     id: 'acc-crown',
     category: 'accessory',
     name: 'Speedway Crown',
     description: 'Royal sparkling crown for the reigning math champion!',
-    perkLabel: 'Style + 10% Bonus Coins',
+    perkLabel: 'Style + 15% Bonus Coins',
     price: 280,
-    perks: { coinMultiplier: 0.1 },
+    perks: { coinMultiplier: 0.15 },
   },
 
-  // ================= TRAILS =================
+  // ================= TRAILS (11) =================
   {
     id: 'trail-classic',
     category: 'trail',
@@ -161,12 +313,30 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: {},
   },
   {
+    id: 'trail-bubbles',
+    category: 'trail',
+    name: 'Soap Bubbles',
+    description: 'Shimmering iridescent bubbles floating behind your car!',
+    perkLabel: 'Bubbly Visual Trail',
+    price: 75,
+    perks: {},
+  },
+  {
     id: 'trail-flames',
     category: 'trail',
     name: 'Rocket Flames',
     description: 'Blazing orange & gold fire streaks behind your wheels!',
     perkLabel: 'Fiery Visual Trail',
     price: 90,
+    perks: {},
+  },
+  {
+    id: 'trail-hearts',
+    category: 'trail',
+    name: 'Floating Hearts',
+    description: 'Sweet pink & ruby hearts drifting down the track!',
+    perkLabel: 'Heart Visual Trail',
+    price: 110,
     perks: {},
   },
   {
@@ -188,6 +358,42 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: {},
   },
   {
+    id: 'trail-music',
+    category: 'trail',
+    name: 'Dancing Music Notes',
+    description: 'Colorful musical notes bouncing out of your car radio!',
+    perkLabel: 'Musical Visual Trail',
+    price: 155,
+    perks: {},
+  },
+  {
+    id: 'trail-snow',
+    category: 'trail',
+    name: 'Winter Snowflakes',
+    description: 'Crystalline icy snowflakes swirling in your slipstream!',
+    perkLabel: 'Frosty Visual Trail',
+    price: 170,
+    perks: {},
+  },
+  {
+    id: 'trail-lightning',
+    category: 'trail',
+    name: 'Electric Bolts',
+    description: 'Zapping neon-yellow lightning sparks of pure speed!',
+    perkLabel: 'Electric Visual Trail',
+    price: 195,
+    perks: {},
+  },
+  {
+    id: 'trail-confetti',
+    category: 'trail',
+    name: 'Party Confetti',
+    description: 'Non-stop colorful celebration confetti everywhere you drive!',
+    perkLabel: 'Party Visual Trail',
+    price: 210,
+    perks: {},
+  },
+  {
     id: 'trail-rainbow',
     category: 'trail',
     name: 'Rainbow Comet',
@@ -197,7 +403,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: {},
   },
 
-  // ================= RACE TRACKS / THEMES =================
+  // ================= RACE TRACKS / THEMES (9) =================
   {
     id: 'track-sunny',
     category: 'track',
@@ -235,6 +441,24 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: {},
   },
   {
+    id: 'track-coral',
+    category: 'track',
+    name: 'Underwater Coral Reef',
+    description: 'Deep ocean turquoise waters, bright coral bubbles & sea-glass track!',
+    perkLabel: 'Ocean Theme Track',
+    price: 190,
+    perks: {},
+  },
+  {
+    id: 'track-forest',
+    category: 'track',
+    name: 'Enchanted Fairy Forest',
+    description: 'Magical emerald glade with glowing fireflies & mossy cobblestone road!',
+    perkLabel: 'Magical Theme Track',
+    price: 210,
+    perks: {},
+  },
+  {
     id: 'track-space',
     category: 'track',
     name: 'Rainbow Space Circuit',
@@ -243,8 +467,26 @@ export const SHOP_ITEMS: ShopItem[] = [
     price: 240,
     perks: {},
   },
+  {
+    id: 'track-volcano',
+    category: 'track',
+    name: 'Volcano Lava Loop',
+    description: 'Glowing magma rivers, obsidian speedway & fiery orange curbs!',
+    perkLabel: 'Volcano Theme Track',
+    price: 270,
+    perks: {},
+  },
+  {
+    id: 'track-neon',
+    category: 'track',
+    name: 'Neon City Night',
+    description: 'Electric midnight skyline with glowing cyan & magenta laser curbs!',
+    perkLabel: 'Cyber Neon Track',
+    price: 310,
+    perks: {},
+  },
 
-  // ================= CAR SOUNDS =================
+  // ================= CAR SOUNDS (7) =================
   {
     id: 'sound-classic',
     category: 'sound',
@@ -273,6 +515,15 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: {},
   },
   {
+    id: 'sound-fairy',
+    category: 'sound',
+    name: 'Magic Fairy Chimes',
+    description: 'Sparkling enchanted harp & fairy bell twinkles!',
+    perkLabel: 'Magical Chime SFX',
+    price: 110,
+    perks: {},
+  },
+  {
     id: 'sound-laser',
     category: 'sound',
     name: 'Space Laser Zoom',
@@ -290,8 +541,17 @@ export const SHOP_ITEMS: ShopItem[] = [
     price: 150,
     perks: {},
   },
+  {
+    id: 'sound-dino',
+    category: 'sound',
+    name: 'Dino Roar Engine',
+    description: 'Playful prehistoric rumble & stomp on every boost!',
+    perkLabel: 'Dino Rumble SFX',
+    price: 175,
+    perks: {},
+  },
 
-  // ================= CAR RADIO STATIONS =================
+  // ================= CAR RADIO STATIONS (9) =================
   {
     id: 'radio-off',
     category: 'radio',
@@ -320,6 +580,15 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: {},
   },
   {
+    id: 'radio-kawaii',
+    category: 'radio',
+    name: 'Kawaii Candy Pop',
+    description: 'Super bubbly, bouncy sugar-rush synth pop melody!',
+    perkLabel: 'Kawaii Pop Music',
+    price: 95,
+    perks: {},
+  },
+  {
     id: 'radio-tropical',
     category: 'radio',
     name: 'Jungle Island Beat',
@@ -338,6 +607,15 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: {},
   },
   {
+    id: 'radio-funk',
+    category: 'radio',
+    name: 'Speedway Funky Groove',
+    description: 'Groovy slap-bass & bouncy disco-funk rhythm!',
+    perkLabel: 'Funky Groove Music',
+    price: 160,
+    perks: {},
+  },
+  {
     id: 'radio-disco',
     category: 'radio',
     name: 'Cosmic Dance Party',
@@ -346,8 +624,17 @@ export const SHOP_ITEMS: ShopItem[] = [
     price: 180,
     perks: {},
   },
+  {
+    id: 'radio-hero',
+    category: 'radio',
+    name: 'Epic Hero Adventure',
+    description: 'Triumphant championship fanfare theme for Grand Prix glory!',
+    perkLabel: 'Heroic Adventure Music',
+    price: 210,
+    perks: {},
+  },
 
-  // ================= VICTORY CELEBRATIONS =================
+  // ================= VICTORY CELEBRATIONS (9) =================
   {
     id: 'cel-confetti',
     category: 'celebration',
@@ -355,6 +642,15 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: 'A joyful team-colored confetti pop at the finish line!',
     perkLabel: 'Starter Celebration',
     price: 0,
+    perks: {},
+  },
+  {
+    id: 'cel-bubbles',
+    category: 'celebration',
+    name: 'Bubble Pop Party',
+    description: 'Floating pastel bubbles & aqua sparkles rising over the podium!',
+    perkLabel: 'Bubbly Victory Show',
+    price: 85,
     perks: {},
   },
   {
@@ -367,12 +663,30 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: {},
   },
   {
+    id: 'cel-hearts',
+    category: 'celebration',
+    name: 'Heart Explosion',
+    description: 'Cascading pink, magenta & gold celebration bursts!',
+    perkLabel: 'Heart Burst Show',
+    price: 115,
+    perks: {},
+  },
+  {
     id: 'cel-stars',
     category: 'celebration',
     name: 'Superstar Shower',
     description: 'Shining golden stars & sparkles raining down in victory!',
     perkLabel: 'Golden Star Show',
     price: 130,
+    perks: {},
+  },
+  {
+    id: 'cel-lightning',
+    category: 'celebration',
+    name: 'Electric Thunder Show',
+    description: 'High-voltage neon-yellow & cyan lightning bursts!',
+    perkLabel: 'Electric Victory Show',
+    price: 155,
     perks: {},
   },
   {
@@ -391,6 +705,15 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: 'Ultimate champion dance + golden coin & trophy explosion!',
     perkLabel: 'Ultimate Victory Show',
     price: 220,
+    perks: {},
+  },
+  {
+    id: 'cel-unicorn',
+    category: 'celebration',
+    name: 'Unicorn Magic Finale',
+    description: 'Dazzling pastel rainbow spirals, golden stars & magical shimmer!',
+    perkLabel: 'Magical Unicorn Show',
+    price: 260,
     perks: {},
   },
 ];
