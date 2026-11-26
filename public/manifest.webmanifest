@@ -1,0 +1,25 @@
+{
+  "name": "Doggy vs. Slothy Speedway",
+  "short_name": "Speedway Math",
+  "description": "2-player real-time math racing game starring Team Doggy and Team Slothy!",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#e0f2fe",
+  "theme_color": "#0d9488",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
