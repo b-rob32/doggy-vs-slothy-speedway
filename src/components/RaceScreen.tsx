@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Delete, Flame, Volume2, VolumeX, X } from 'lucide-react';
+import { Delete, Flame, Radio, Volume2, VolumeX, X } from 'lucide-react';
 import {
   EquippedLoadout,
   MathProblem,
@@ -12,7 +12,7 @@ import {
   SingleOperation,
   TeamId,
 } from '../types';
-import { getEffectivePerks, getTeamMeta } from '../data/shop';
+import { getEffectivePerks, getShopItem, getTeamMeta, SHOP_ITEMS } from '../data/shop';
 import { generateProblem } from '../engine/mathGenerator';
 import { arcadeAudio } from '../engine/audio';
 import { calculateCoins } from '../engine/storage';
@@ -22,12 +22,14 @@ interface RaceScreenProps {
   mode: 'solo' | 'multiplayer';
   myTeam: TeamId;
   myLoadout: EquippedLoadout;
+  unlockedIds: string[];
   opponentLoadout: EquippedLoadout;
   config: RaceConfig;
   myMathConfig: PlayerMathConfig;
   remoteOpponentState: RacerLiveState | null;
   soundMuted: boolean;
   onToggleMute: () => void;
+  onChangeRadio: (radioId: string) => void;
   onSendProgress: (state: RacerLiveState) => void;
   onRaceFinish: (summary: RaceSummary) => void;
   onQuit: () => void;
@@ -45,12 +47,14 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
   mode,
   myTeam,
   myLoadout,
+  unlockedIds,
   opponentLoadout,
   config,
   myMathConfig,
   remoteOpponentState,
   soundMuted,
   onToggleMute,
+  onChangeRadio,
   onSendProgress,
   onRaceFinish,
   onQuit,
@@ -62,7 +66,14 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     [myLoadout, config.fairRaceNoPerks]
   );
 
-  // Countdown: 3 -> 2 -> 1 -> 0 (GO!) -> -1 (racing)
+  const unlockedRadios = useMemo(
+    () =>
+      SHOP_ITEMS.filter(
+        (i) => i.category === 'radio' && unlockedIds.includes(i.id)
+      ),
+    [unlockedIds]
+  );
+
   const [countdown, setCountdown] = useState<number>(3);
   const [raceStartedAt, setRaceStartedAt] = useState<number | null>(null);
   const [timeLeftSec, setTimeLeftSec] = useState<number>(config.sprintSeconds);
@@ -128,6 +139,25 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
   oppStateRef.current = opponentState;
   raceStartRef.current = raceStartedAt;
 
+  // Manage Car Radio playback while racing
+  useEffect(() => {
+    if (raceStartedAt && !finishedRef.current && !soundMuted) {
+      arcadeAudio.startRadio(myLoadout.radioId);
+    } else {
+      arcadeAudio.stopRadio();
+    }
+    return () => {
+      arcadeAudio.stopRadio();
+    };
+  }, [raceStartedAt, myLoadout.radioId, soundMuted]);
+
+  const cycleRadioStation = () => {
+    if (unlockedRadios.length <= 1) return;
+    const idx = unlockedRadios.findIndex((r) => r.id === myLoadout.radioId);
+    const next = unlockedRadios[(idx + 1) % unlockedRadios.length];
+    onChangeRadio(next.id);
+  };
+
   const showTurboBanner = useCallback((team: TeamId) => {
     setTurboBannerTeam(team);
     if (bannerTimeoutRef.current) {
@@ -138,7 +168,6 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     }, 2400);
   }, []);
 
-  // Trigger opponent turbo banner if remote opponent activates turbo!
   const prevOppTurboRef = useRef(0);
   useEffect(() => {
     if (
@@ -184,6 +213,7 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     (finalMy: RacerLiveState, finalOpp: RacerLiveState) => {
       if (finishedRef.current) return;
       finishedRef.current = true;
+      arcadeAudio.stopRadio();
 
       const durationMs = Math.max(
         1000,
@@ -224,7 +254,7 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
         config.fairRaceNoPerks
       );
 
-      arcadeAudio.playVictory();
+      arcadeAudio.playVictory(myLoadout.celebrationId);
 
       onRaceFinish({
         myTeam,
@@ -255,7 +285,6 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     ]
   );
 
-  // Watch for multiplayer opponent finishing a lap race
   useEffect(() => {
     if (
       mode === 'multiplayer' &&
@@ -268,7 +297,6 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     }
   }, [config.format, finalizeRace, mode, remoteOpponentState, totalLaps]);
 
-  // Timed Sprint countdown timer
   useEffect(() => {
     if (!raceStartedAt || config.format !== 'sprint') return;
     const interval = window.setInterval(() => {
@@ -283,16 +311,15 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     return () => window.clearInterval(interval);
   }, [config.format, config.sprintSeconds, finalizeRace, raceStartedAt]);
 
-  // Solo CPU Opponent AI loop
   useEffect(() => {
     if (mode !== 'solo' || !raceStartedAt) return;
 
     const baseMs =
       config.cpuDifficulty === 'easy'
-        ? 3900
+        ? 4100
         : config.cpuDifficulty === 'medium'
-        ? 2500
-        : 1650;
+        ? 2700
+        : 1800;
 
     let timer = 0;
     const scheduleNext = () => {
@@ -369,8 +396,7 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
         const triggeredTurbo =
           nextStreak >= perks.turboStreakReq &&
           (nextStreak === perks.turboStreakReq || nextStreak % 3 === 0);
-        const turboActive =
-          triggeredTurbo || prev.turboUntil > Date.now();
+        const turboActive = triggeredTurbo || prev.turboUntil > Date.now();
 
         const baseStep = BASE_LAP_STEP * (1 + perks.speedBonus);
         const turboStep = turboActive ? 0.042 * (1 + perks.turboBonus) : 0;
@@ -386,7 +412,7 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
           arcadeAudio.playTurbo(myTeam);
           showTurboBanner(myTeam);
         } else {
-          arcadeAudio.playCorrect(nextStreak);
+          arcadeAudio.playCorrect(nextStreak, myLoadout.soundId);
         }
 
         const nextState: RacerLiveState = {
@@ -416,8 +442,7 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
           setProblem(generateProblem(myMathConfig, promptStr));
         }
       } else {
-        // Wrong answer -> spin-out!
-        arcadeAudio.playWrong();
+        arcadeAudio.playWrong(myLoadout.soundId);
         const spinMs = Math.round(950 * (1 - perks.spinoutReduction));
         const prev = myStateRef.current;
         const nextState: RacerLiveState = {
@@ -462,6 +487,7 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     },
     [
       finalizeRace,
+      myLoadout.soundId,
       myMathConfig,
       myTeam,
       onSendProgress,
@@ -477,7 +503,6 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     ]
   );
 
-  // Keyboard support for both Multiple Choice (1-4) and Type Answer (0-9, Enter, Backspace)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!raceStartedAt || finishedRef.current) return;
@@ -508,6 +533,7 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
 
   const myMeta = getTeamMeta(myTeam);
   const oppMeta = getTeamMeta(oppTeam);
+  const activeRadioItem = getShopItem(myLoadout.radioId);
 
   const currentLap = totalLaps
     ? Math.min(totalLaps, Math.floor(myState.progress) + 1)
@@ -539,6 +565,18 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
         </div>
 
         <div className="hud-right">
+          {/* Live Car Radio Tuner */}
+          <button
+            className={`radio-tuner-btn ${
+              myLoadout.radioId !== 'radio-off' && !soundMuted ? 'is-playing' : ''
+            }`}
+            onClick={cycleRadioStation}
+            title="Tap to switch Car Radio stations!"
+          >
+            <Radio size={15} />
+            <span>{activeRadioItem?.name ?? 'Radio Off'}</span>
+          </button>
+
           <div className="turbo-meter" title="Answer streak for Turbo Boost!">
             <Flame
               size={16}

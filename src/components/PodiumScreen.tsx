@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import confetti from 'canvas-confetti';
 import {
   CheckCircle2,
   Coins,
@@ -12,6 +11,10 @@ import {
 } from 'lucide-react';
 import { HeadToHeadRecord, RaceSummary } from '../types';
 import { getTeamMeta } from '../data/shop';
+import {
+  getCelebrationInfo,
+  runCelebrationAnimation,
+} from '../engine/celebrations';
 
 interface PodiumScreenProps {
   summary: RaceSummary;
@@ -40,19 +43,15 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
       : summary.myTeam;
   const winnerMeta = getTeamMeta(winnerTeam);
 
-  useEffect(() => {
-    const colors =
-      winnerTeam === 'doggy'
-        ? ['#e11d48', '#facc15', '#fb923c', '#ffffff']
-        : ['#0d9488', '#34d399', '#38bdf8', '#facc15'];
+  const celebrationId =
+    summary.result === 'loss'
+      ? summary.opponentState.loadout.celebrationId || 'cel-confetti'
+      : summary.myState.loadout.celebrationId || 'cel-confetti';
+  const celInfo = getCelebrationInfo(celebrationId);
 
-    confetti({
-      particleCount: 95,
-      spread: 80,
-      origin: { y: 0.55 },
-      colors,
-    });
-  }, [winnerTeam]);
+  useEffect(() => {
+    return runCelebrationAnimation(celebrationId, winnerTeam);
+  }, [celebrationId, winnerTeam]);
 
   const titleText =
     summary.result === 'win'
@@ -63,16 +62,22 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
 
   return (
     <div className="screen podium-screen">
-      {/* Winner Hero */}
-      <div className={`podium-hero podium-hero--${winnerTeam}`}>
+      {/* Winner Hero with Equipped Victory Celebration */}
+      <div
+        className={`podium-hero podium-hero--${winnerTeam} ${
+          summary.result !== 'loss' ? celInfo.heroClass : ''
+        }`}
+      >
         <img
           src={winnerMeta.portrait}
           alt={winnerMeta.name}
-          className="podium-avatar"
+          className={`podium-avatar ${
+            summary.result === 'win' ? 'podium-avatar--dance' : ''
+          }`}
         />
         <div className="podium-title-wrap">
           <div className="podium-badge">
-            <Trophy size={16} /> CHECKERED FLAG!
+            <Trophy size={16} /> {celInfo.banner}
           </div>
           <h1>{titleText}</h1>
           <p>

@@ -25,7 +25,6 @@ function buildChoices(
   b: number
 ): number[] {
   const set = new Set<number>([answer]);
-
   const candidates: number[] = [];
 
   if (operation === 'multiplication') {
@@ -99,34 +98,39 @@ function generateSingle(
   if (op === 'addition') {
     symbol = '+';
     if (difficulty === 'easy') {
-      a = randInt(1, 9);
-      b = randInt(1, 10 - Math.min(a, 5) + 3);
-      if (a + b > 14) b = randInt(1, 6);
+      // Friendly sums up to 10
+      a = randInt(1, 6);
+      b = randInt(1, Math.max(1, 10 - a));
     } else if (difficulty === 'medium') {
-      a = randInt(5, 20);
-      b = randInt(4, 20);
+      // Sums up to 24
+      a = randInt(3, 12);
+      b = randInt(2, 12);
     } else {
-      a = randInt(15, 65);
-      b = randInt(12, 45);
+      // Friendly 2-digit sums up to 65
+      a = randInt(10, 35);
+      b = randInt(8, 30);
     }
     answer = a + b;
   } else if (op === 'subtraction') {
     symbol = '-';
     if (difficulty === 'easy') {
-      a = randInt(3, 12);
+      // Numbers up to 10, never negative
+      a = randInt(2, 10);
       b = randInt(1, a);
     } else if (difficulty === 'medium') {
-      a = randInt(10, 25);
-      b = randInt(3, Math.min(a, 18));
+      // Numbers up to 18
+      a = randInt(6, 18);
+      b = randInt(2, Math.min(a, 12));
     } else {
-      a = randInt(25, 95);
-      b = randInt(9, Math.min(a - 1, 55));
+      // Numbers up to 50
+      a = randInt(15, 50);
+      b = randInt(5, Math.min(a - 1, 30));
     }
     answer = a - b;
   } else if (op === 'multiplication') {
     symbol = '×';
     if (timesTableFocus && timesTableFocus >= 2 && timesTableFocus <= 12) {
-      const maxOther = difficulty === 'easy' ? 6 : difficulty === 'medium' ? 10 : 12;
+      const maxOther = difficulty === 'easy' ? 5 : difficulty === 'medium' ? 8 : 12;
       const other = randInt(1, maxOther);
       if (Math.random() < 0.5) {
         a = timesTableFocus;
@@ -136,28 +140,28 @@ function generateSingle(
         b = timesTableFocus;
       }
     } else if (difficulty === 'easy') {
-      a = randInt(1, 5);
+      a = randInt(1, 4);
       b = randInt(1, 5);
     } else if (difficulty === 'medium') {
-      a = randInt(2, 10);
-      b = randInt(2, 10);
+      a = randInt(2, 8);
+      b = randInt(2, 8);
     } else {
-      a = randInt(3, 12);
-      b = randInt(3, 12);
+      a = randInt(2, 11);
+      b = randInt(2, 11);
     }
     answer = a * b;
   } else {
     // division — always clean whole-number answers!
     symbol = '÷';
     if (difficulty === 'easy') {
-      b = randInt(1, 5);
-      answer = randInt(1, 5);
+      b = randInt(1, 4);
+      answer = randInt(1, 4);
     } else if (difficulty === 'medium') {
+      b = randInt(2, 8);
+      answer = randInt(2, 8);
+    } else {
       b = randInt(2, 10);
       answer = randInt(2, 10);
-    } else {
-      b = randInt(3, 12);
-      answer = randInt(3, 12);
     }
     a = b * answer;
   }

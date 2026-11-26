@@ -48,8 +48,8 @@ const OPERATIONS: { id: Operation; label: string; symbol: string }[] = [
 
 const DIFFICULTIES: { id: Difficulty; label: string; hint: string }[] = [
   { id: 'easy', label: 'Easy', hint: 'Up to 10 / ×1–5' },
-  { id: 'medium', label: 'Medium', hint: 'Up to 20 / ×2–10' },
-  { id: 'hard', label: 'Hard', hint: 'Up to 95 / ×3–12' },
+  { id: 'medium', label: 'Medium', hint: 'Up to 24 / ×2–8' },
+  { id: 'hard', label: 'Hard', hint: 'Up to 65 / ×2–11' },
 ];
 
 const MathConfigEditor: React.FC<{

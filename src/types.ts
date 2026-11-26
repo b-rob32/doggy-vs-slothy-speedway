@@ -54,7 +54,14 @@ export interface MissedQuestion {
   operation: SingleOperation;
 }
 
-export type ShopCategory = 'car' | 'gear' | 'accessory' | 'trail';
+export type ShopCategory =
+  | 'car'
+  | 'gear'
+  | 'accessory'
+  | 'trail'
+  | 'sound'
+  | 'radio'
+  | 'celebration';
 
 export interface ShopPerks {
   speedBonus?: number; // e.g., 0.08 = +8% progress per correct answer
@@ -80,6 +87,9 @@ export interface EquippedLoadout {
   gearId: string;
   accessoryId: string;
   trailId: string;
+  soundId: string;
+  radioId: string;
+  celebrationId: string;
 }
 
 export interface OperationStat {
@@ -141,13 +151,13 @@ export interface SaveData {
 
 export interface RacerLiveState {
   team: TeamId;
-  progress: number; // 0 .. totalLaps (e.g., 0 .. 3.0) for lap race, or unbounded laps for sprint
+  progress: number;
   correctCount: number;
   wrongCount: number;
   streak: number;
   bestStreak: number;
-  turboUntil: number; // timestamp ms
-  spinoutUntil: number; // timestamp ms
+  turboUntil: number;
+  spinoutUntil: number;
   finished: boolean;
   finishTimeMs: number | null;
   loadout: EquippedLoadout;
@@ -180,7 +190,6 @@ export interface RaceSummary {
   perOperationCounts: Record<SingleOperation, OperationStat>;
 }
 
-// PeerJS multiplayer protocol messages
 export type PeerMessage =
   | {
       type: 'hello';
@@ -202,7 +211,7 @@ export type PeerMessage =
     }
   | {
       type: 'start-race';
-      startAt: number; // synchronized countdown start timestamp (relative offset)
+      startAt: number;
       config: RaceConfig;
     }
   | {

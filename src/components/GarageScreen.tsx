@@ -6,7 +6,12 @@ import {
   Coins,
   Crown,
   Lock,
+  PartyPopper,
+  Play,
+  Radio,
   Sparkles,
+  Square,
+  Volume2,
   Wrench,
 } from 'lucide-react';
 import { EquippedLoadout, ShopCategory, TeamId, TeamProfile } from '../types';
@@ -18,6 +23,7 @@ import {
   TrailParticle,
 } from './CarRenderer';
 import { arcadeAudio } from '../engine/audio';
+import { runCelebrationAnimation } from '../engine/celebrations';
 
 interface GarageScreenProps {
   profile: TeamProfile;
@@ -32,10 +38,13 @@ const CATEGORIES: {
   label: string;
   icon: React.ReactNode;
 }[] = [
-  { id: 'car', label: 'Cars', icon: <Car size={18} /> },
-  { id: 'gear', label: 'Gear', icon: <Wrench size={18} /> },
-  { id: 'accessory', label: 'Accessories', icon: <Crown size={18} /> },
-  { id: 'trail', label: 'Trails', icon: <Sparkles size={18} /> },
+  { id: 'car', label: 'Cars', icon: <Car size={16} /> },
+  { id: 'gear', label: 'Gear', icon: <Wrench size={16} /> },
+  { id: 'accessory', label: 'Style', icon: <Crown size={16} /> },
+  { id: 'trail', label: 'Trails', icon: <Sparkles size={16} /> },
+  { id: 'sound', label: 'Sounds', icon: <Volume2 size={16} /> },
+  { id: 'radio', label: 'Radio', icon: <Radio size={16} /> },
+  { id: 'celebration', label: 'Win Show', icon: <PartyPopper size={16} /> },
 ];
 
 const GaragePreviewCanvas: React.FC<{
@@ -81,11 +90,9 @@ const GaragePreviewCanvas: React.FC<{
       ctx.save();
       ctx.scale(dpr, dpr);
 
-      // Asphalt garage test strip
       ctx.fillStyle = '#1e293b';
       ctx.fillRect(0, 0, w, h);
 
-      // Curbs top & bottom
       for (let x = -48; x < w + 48; x += 24) {
         const idx = Math.floor((x + roadOffset) / 24);
         ctx.fillStyle = idx % 2 === 0 ? '#ef4444' : '#ffffff';
@@ -93,7 +100,6 @@ const GaragePreviewCanvas: React.FC<{
         ctx.fillRect(x - (roadOffset % 24), h - 9, 24, 9);
       }
 
-      // Dashed center road lines scrolling left
       ctx.fillStyle = 'rgba(255,255,255,0.45)';
       for (let x = -48; x < w + 48; x += 48) {
         ctx.fillRect(x - roadOffset, h / 2 - 2, 26, 4);
@@ -158,21 +164,60 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
   onBack,
 }) => {
   const [category, setCategory] = useState<ShopCategory>('car');
+  const [previewingRadio, setPreviewingRadio] = useState<string | null>(null);
+  const celCleanupRef = useRef<(() => void) | null>(null);
+
   const meta = getTeamMeta(profile.team);
   const perks = getEffectivePerks(profile.equipped, false);
   const items = SHOP_ITEMS.filter((i) => i.category === category);
+
+  useEffect(() => {
+    return () => {
+      arcadeAudio.stopRadio();
+      celCleanupRef.current?.();
+    };
+  }, []);
+
+  const stopRadioPreview = () => {
+    arcadeAudio.stopRadio();
+    setPreviewingRadio(null);
+  };
+
+  const handleToggleRadioPreview = (radioId: string) => {
+    if (previewingRadio === radioId) {
+      stopRadioPreview();
+    } else {
+      arcadeAudio.startRadio(radioId);
+      setPreviewingRadio(radioId);
+    }
+  };
+
+  const handlePreviewCelebration = (celId: string) => {
+    celCleanupRef.current?.();
+    arcadeAudio.playVictory(celId);
+    celCleanupRef.current = runCelebrationAnimation(celId, profile.team);
+  };
 
   const isEquipped = (cat: ShopCategory, id: string) => {
     if (cat === 'car') return profile.equipped.carId === id;
     if (cat === 'gear') return profile.equipped.gearId === id;
     if (cat === 'accessory') return profile.equipped.accessoryId === id;
-    return profile.equipped.trailId === id;
+    if (cat === 'trail') return profile.equipped.trailId === id;
+    if (cat === 'sound') return profile.equipped.soundId === id;
+    if (cat === 'radio') return profile.equipped.radioId === id;
+    return profile.equipped.celebrationId === id;
   };
 
   return (
     <div className="screen garage-screen">
       <div className="top-bar">
-        <button className="back-btn" onClick={onBack}>
+        <button
+          className="back-btn"
+          onClick={() => {
+            stopRadioPreview();
+            onBack();
+          }}
+        >
           <ArrowLeft size={20} /> Back
         </button>
         <h2 className="screen-title">🏎️ Speedway Garage</h2>
@@ -229,12 +274,15 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
       </div>
 
       {/* Category Tabs */}
-      <div className="category-tabs">
+      <div className="category-tabs category-tabs--wrap">
         {CATEGORIES.map((c) => (
           <button
             key={c.id}
             className={`cat-tab ${category === c.id ? 'active' : ''}`}
-            onClick={() => setCategory(c.id)}
+            onClick={() => {
+              if (c.id !== 'radio') stopRadioPreview();
+              setCategory(c.id);
+            }}
           >
             {c.icon}
             <span>{c.label}</span>
@@ -255,7 +303,49 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
               className={`shop-card ${equipped ? 'shop-card--equipped' : ''}`}
             >
               <div className="shop-card-top">
-                <h4>{item.name}</h4>
+                <div className="shop-card-title-row">
+                  <h4>{item.name}</h4>
+                  {item.category === 'sound' && (
+                    <button
+                      type="button"
+                      className="preview-mini-btn"
+                      onClick={() => arcadeAudio.previewSound(item.id)}
+                      title="Hear this car sound!"
+                    >
+                      <Volume2 size={14} /> Test
+                    </button>
+                  )}
+                  {item.category === 'radio' && item.id !== 'radio-off' && (
+                    <button
+                      type="button"
+                      className={`preview-mini-btn ${
+                        previewingRadio === item.id ? 'is-active' : ''
+                      }`}
+                      onClick={() => handleToggleRadioPreview(item.id)}
+                      title="Listen to this radio station!"
+                    >
+                      {previewingRadio === item.id ? (
+                        <>
+                          <Square size={12} /> Stop
+                        </>
+                      ) : (
+                        <>
+                          <Play size={12} /> Listen
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {item.category === 'celebration' && (
+                    <button
+                      type="button"
+                      className="preview-mini-btn"
+                      onClick={() => handlePreviewCelebration(item.id)}
+                      title="Preview this celebration!"
+                    >
+                      <PartyPopper size={14} /> Watch
+                    </button>
+                  )}
+                </div>
                 <span className="perk-badge">{item.perkLabel}</span>
               </div>
               <p className="shop-card-desc">{item.description}</p>
@@ -268,7 +358,11 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
                   <button
                     className="shop-btn shop-btn--equip"
                     onClick={() => {
-                      arcadeAudio.playCoin();
+                      if (item.category === 'sound') {
+                        arcadeAudio.previewSound(item.id);
+                      } else {
+                        arcadeAudio.playCoin();
+                      }
                       onEquipItem(item.category, item.id);
                     }}
                   >
@@ -279,7 +373,12 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
                     className="shop-btn shop-btn--buy"
                     disabled={!canAfford}
                     onClick={() => {
-                      arcadeAudio.playVictory();
+                      arcadeAudio.playVictory(
+                        item.category === 'celebration' ? item.id : undefined
+                      );
+                      if (item.category === 'celebration') {
+                        handlePreviewCelebration(item.id);
+                      }
                       onBuyItem(item.id);
                     }}
                   >

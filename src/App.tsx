@@ -342,6 +342,9 @@ export const App: React.FC = () => {
       if (item.category === 'gear') nextEquipped.gearId = itemId;
       if (item.category === 'accessory') nextEquipped.accessoryId = itemId;
       if (item.category === 'trail') nextEquipped.trailId = itemId;
+      if (item.category === 'sound') nextEquipped.soundId = itemId;
+      if (item.category === 'radio') nextEquipped.radioId = itemId;
+      if (item.category === 'celebration') nextEquipped.celebrationId = itemId;
 
       return {
         ...prev,
@@ -367,6 +370,9 @@ export const App: React.FC = () => {
       if (category === 'gear') nextEquipped.gearId = itemId;
       if (category === 'accessory') nextEquipped.accessoryId = itemId;
       if (category === 'trail') nextEquipped.trailId = itemId;
+      if (category === 'sound') nextEquipped.soundId = itemId;
+      if (category === 'radio') nextEquipped.radioId = itemId;
+      if (category === 'celebration') nextEquipped.celebrationId = itemId;
       return {
         ...prev,
         profiles: {
@@ -445,15 +451,18 @@ export const App: React.FC = () => {
           mode={mode}
           myTeam={activeTeam}
           myLoadout={save.profiles[activeTeam].equipped}
+          unlockedIds={save.profiles[activeTeam].unlockedIds}
           opponentLoadout={effectiveOpponentLoadout}
           config={raceConfig}
           myMathConfig={myMathConfig}
           remoteOpponentState={remoteOpponentState}
           soundMuted={save.soundMuted}
           onToggleMute={handleToggleMute}
+          onChangeRadio={(radioId) => handleEquipItem('radio', radioId)}
           onSendProgress={handleSendProgress}
           onRaceFinish={handleRaceFinish}
           onQuit={() => {
+            arcadeAudio.stopRadio();
             cleanupPeer();
             setScreen('home');
           }}

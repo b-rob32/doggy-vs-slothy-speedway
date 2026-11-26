@@ -1618,3 +1618,99 @@ button:disabled {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ==================== RADIO TUNER, PREVIEWS & CELEBRATIONS ==================== */
+.radio-tuner-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  color: #475569;
+  border: 2px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-weight: 800;
+  font-size: 0.78rem;
+  max-width: 155px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.radio-tuner-btn.is-playing {
+  background: linear-gradient(135deg, #ede9fe, #e0f2fe);
+  color: #4338ca;
+  border-color: #818cf8;
+}
+
+.category-tabs--wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.category-tabs--wrap .cat-tab {
+  flex: 1 1 110px;
+  padding: 9px 10px;
+  font-size: 0.84rem;
+}
+
+.shop-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.preview-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 2px solid #93c5fd;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-weight: 800;
+  font-size: 0.76rem;
+  flex-shrink: 0;
+}
+
+.preview-mini-btn.is-active {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+
+.podium-avatar--dance {
+  animation: victoryDance 0.9s ease-in-out infinite alternate;
+}
+
+.podium-cel--rainbow {
+  background: linear-gradient(135deg, #ef4444, #f59e0b, #10b981, #3b82f6, #a855f7) !important;
+  background-size: 200% 200% !important;
+  animation: rainbowShift 4s ease infinite;
+}
+
+.podium-cel--champion {
+  box-shadow: 0 0 0 4px #fde047, 0 14px 36px rgba(234, 179, 8, 0.45) !important;
+}
+
+.podium-cel--stars {
+  box-shadow: 0 0 0 4px #fef08a, 0 14px 34px rgba(250, 204, 21, 0.35) !important;
+}
+
+@keyframes victoryDance {
+  0% {
+    transform: translateY(0) rotate(-3deg) scale(1);
+  }
+  100% {
+    transform: translateY(-8px) rotate(3deg) scale(1.05);
+  }
+}
+
+@keyframes rainbowShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
