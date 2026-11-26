@@ -2009,3 +2009,73 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==================== GARAGE LIVE TRY-ON PREVIEW ==================== */
+.shop-card--interactive {
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.shop-card--interactive:hover {
+  transform: translateY(-2px);
+  border-color: #93c5fd;
+}
+
+.shop-card--previewing {
+  border-color: #3b82f6 !important;
+  background: #eff6ff !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), var(--shadow);
+}
+
+.previewing-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #3b82f6;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.preview-active-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 14px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-top: 2px solid #bfdbfe;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.preview-active-bar span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.preview-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  color: #1d4ed8;
+  border: 2px solid #93c5fd;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-weight: 800;
+  font-size: 0.76rem;
+}
+
+.garage-hint {
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #475569;
+  margin: -4px 0;
+}

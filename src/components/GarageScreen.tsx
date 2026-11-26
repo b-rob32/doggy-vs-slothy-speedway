@@ -5,11 +5,13 @@ import {
   Check,
   Coins,
   Crown,
+  Eye,
   Lock,
   Map as MapIcon,
   PartyPopper,
   Play,
   Radio,
+  RotateCcw,
   Sparkles,
   Square,
   Volume2,
@@ -57,6 +59,42 @@ const TRACK_SWATCHES: Record<string, string[]> = {
   'track-space': ['#1e1b4b', '#6366f1', '#ec4899', '#22d3ee', '#facc15'],
 };
 
+const TRACK_ROAD_THEME: Record<
+  string,
+  { road: string; curbA: string; curbB: string; dash: string }
+> = {
+  'track-sunny': {
+    road: '#1e293b',
+    curbA: '#ef4444',
+    curbB: '#ffffff',
+    dash: 'rgba(255,255,255,0.45)',
+  },
+  'track-candy': {
+    road: '#5c2d16',
+    curbA: '#f472b6',
+    curbB: '#ffffff',
+    dash: '#fbcfe8',
+  },
+  'track-beach': {
+    road: '#92400e',
+    curbA: '#22d3ee',
+    curbB: '#fde68a',
+    dash: 'rgba(254, 243, 199, 0.7)',
+  },
+  'track-snow': {
+    road: '#0284c7',
+    curbA: '#ef4444',
+    curbB: '#f0f9ff',
+    dash: 'rgba(255,255,255,0.75)',
+  },
+  'track-space': {
+    road: '#1e1b4b',
+    curbA: '#ec4899',
+    curbB: '#22d3ee',
+    dash: '#fde047',
+  },
+};
+
 const GaragePreviewCanvas: React.FC<{
   team: TeamId;
   loadout: EquippedLoadout;
@@ -100,17 +138,31 @@ const GaragePreviewCanvas: React.FC<{
       ctx.save();
       ctx.scale(dpr, dpr);
 
-      ctx.fillStyle = '#1e293b';
+      const theme =
+        TRACK_ROAD_THEME[loadoutRef.current.trackId] ??
+        TRACK_ROAD_THEME['track-sunny'];
+
+      ctx.fillStyle = theme.road;
       ctx.fillRect(0, 0, w, h);
+
+      // Subtle stars on space track
+      if (loadoutRef.current.trackId === 'track-space') {
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        for (let i = 0; i < 18; i++) {
+          const sx = ((i * 73 - roadOffset * 2) % w + w) % w;
+          const sy = 16 + ((i * 41) % (h - 32));
+          ctx.fillRect(sx, sy, 2.5, 2.5);
+        }
+      }
 
       for (let x = -48; x < w + 48; x += 24) {
         const idx = Math.floor((x + roadOffset) / 24);
-        ctx.fillStyle = idx % 2 === 0 ? '#ef4444' : '#ffffff';
+        ctx.fillStyle = idx % 2 === 0 ? theme.curbA : theme.curbB;
         ctx.fillRect(x - (roadOffset % 24), 0, 24, 9);
         ctx.fillRect(x - (roadOffset % 24), h - 9, 24, 9);
       }
 
-      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fillStyle = theme.dash;
       for (let x = -48; x < w + 48; x += 48) {
         ctx.fillRect(x - roadOffset, h / 2 - 2, 26, 4);
       }
@@ -166,6 +218,27 @@ const GaragePreviewCanvas: React.FC<{
   return <canvas ref={canvasRef} className="garage-preview-canvas" />;
 };
 
+function categoryToLoadoutKey(cat: ShopCategory): keyof EquippedLoadout {
+  switch (cat) {
+    case 'car':
+      return 'carId';
+    case 'gear':
+      return 'gearId';
+    case 'accessory':
+      return 'accessoryId';
+    case 'trail':
+      return 'trailId';
+    case 'track':
+      return 'trackId';
+    case 'sound':
+      return 'soundId';
+    case 'radio':
+      return 'radioId';
+    case 'celebration':
+      return 'celebrationId';
+  }
+}
+
 export const GarageScreen: React.FC<GarageScreenProps> = ({
   profile,
   onSwitchTeam,
@@ -174,11 +247,20 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
   onBack,
 }) => {
   const [category, setCategory] = useState<ShopCategory>('car');
+  const [previewOverrides, setPreviewOverrides] = useState<
+    Partial<EquippedLoadout>
+  >({});
   const [previewingRadio, setPreviewingRadio] = useState<string | null>(null);
   const celCleanupRef = useRef<(() => void) | null>(null);
 
+  const previewLoadout: EquippedLoadout = {
+    ...profile.equipped,
+    ...previewOverrides,
+  };
+
+  const hasPreview = Object.keys(previewOverrides).length > 0;
   const meta = getTeamMeta(profile.team, profile.racerName);
-  const perks = getEffectivePerks(profile.equipped, false);
+  const perks = getEffectivePerks(previewLoadout, false);
   const items = SHOP_ITEMS.filter((i) => i.category === category);
 
   useEffect(() => {
@@ -187,6 +269,11 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
       celCleanupRef.current?.();
     };
   }, []);
+
+  // Clear try-on preview when switching teams
+  useEffect(() => {
+    setPreviewOverrides({});
+  }, [profile.team]);
 
   const stopRadioPreview = () => {
     arcadeAudio.stopRadio();
@@ -208,16 +295,58 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
     celCleanupRef.current = runCelebrationAnimation(celId, profile.team);
   };
 
-  const isEquipped = (cat: ShopCategory, id: string) => {
-    if (cat === 'car') return profile.equipped.carId === id;
-    if (cat === 'gear') return profile.equipped.gearId === id;
-    if (cat === 'accessory') return profile.equipped.accessoryId === id;
-    if (cat === 'trail') return profile.equipped.trailId === id;
-    if (cat === 'track') return profile.equipped.trackId === id;
-    if (cat === 'sound') return profile.equipped.soundId === id;
-    if (cat === 'radio') return profile.equipped.radioId === id;
-    return profile.equipped.celebrationId === id;
+  const handleSelectCardForPreview = (cat: ShopCategory, itemId: string) => {
+    if (cat === 'sound') {
+      arcadeAudio.previewSound(itemId);
+      return;
+    }
+    if (cat === 'radio') {
+      if (itemId === 'radio-off') stopRadioPreview();
+      else handleToggleRadioPreview(itemId);
+      return;
+    }
+    if (cat === 'celebration') {
+      handlePreviewCelebration(itemId);
+      return;
+    }
+
+    const key = categoryToLoadoutKey(cat);
+    setPreviewOverrides((prev) => {
+      // If clicking the already-equipped item, clear the override for this category
+      if (profile.equipped[key] === itemId) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: itemId };
+    });
   };
+
+  const clearCategoryOverride = (cat: ShopCategory) => {
+    const key = categoryToLoadoutKey(cat);
+    setPreviewOverrides((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const isEquipped = (cat: ShopCategory, id: string) => {
+    return profile.equipped[categoryToLoadoutKey(cat)] === id;
+  };
+
+  const isPreviewed = (cat: ShopCategory, id: string) => {
+    const key = categoryToLoadoutKey(cat);
+    return previewOverrides[key] === id;
+  };
+
+  const isVisualPreviewCategory =
+    category === 'car' ||
+    category === 'gear' ||
+    category === 'accessory' ||
+    category === 'trail' ||
+    category === 'track';
 
   return (
     <div className="screen garage-screen">
@@ -258,7 +387,24 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
 
       {/* Live Preview Stage */}
       <div className="garage-stage">
-        <GaragePreviewCanvas team={profile.team} loadout={profile.equipped} />
+        <GaragePreviewCanvas team={profile.team} loadout={previewLoadout} />
+
+        {hasPreview && (
+          <div className="preview-active-bar">
+            <span>
+              <Eye size={15} /> Try-On Preview active! Tap any item below to try
+              it on {meta.shortName}.
+            </span>
+            <button
+              type="button"
+              className="preview-reset-btn"
+              onClick={() => setPreviewOverrides({})}
+            >
+              <RotateCcw size={13} /> Reset
+            </button>
+          </div>
+        )}
+
         <div className="garage-perks-strip">
           <span>
             ⚡ Speed: <strong>+{Math.round(perks.speedBonus * 100)}%</strong>
@@ -301,26 +447,52 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
         ))}
       </div>
 
+      {isVisualPreviewCategory && (
+        <div className="garage-hint">
+          👀 Tap any card to try it on {meta.shortName} before buying!
+        </div>
+      )}
+
       {/* Items Grid */}
       <div className="shop-grid">
         {items.map((item) => {
           const owned = profile.unlockedIds.includes(item.id);
           const equipped = isEquipped(item.category, item.id);
+          const previewed = isPreviewed(item.category, item.id);
           const canAfford = profile.coins >= item.price;
 
           return (
             <div
               key={item.id}
-              className={`shop-card ${equipped ? 'shop-card--equipped' : ''}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => handleSelectCardForPreview(item.category, item.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleSelectCardForPreview(item.category, item.id);
+                }
+              }}
+              className={`shop-card shop-card--interactive ${
+                equipped ? 'shop-card--equipped' : ''
+              } ${previewed ? 'shop-card--previewing' : ''}`}
             >
               <div className="shop-card-top">
                 <div className="shop-card-title-row">
                   <h4>{item.name}</h4>
+                  {previewed && (
+                    <span className="previewing-pill">
+                      <Eye size={12} /> Trying On
+                    </span>
+                  )}
                   {item.category === 'sound' && (
                     <button
                       type="button"
                       className="preview-mini-btn"
-                      onClick={() => arcadeAudio.previewSound(item.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        arcadeAudio.previewSound(item.id);
+                      }}
                       title="Hear this car sound!"
                     >
                       <Volume2 size={14} /> Test
@@ -332,7 +504,10 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
                       className={`preview-mini-btn ${
                         previewingRadio === item.id ? 'is-active' : ''
                       }`}
-                      onClick={() => handleToggleRadioPreview(item.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleRadioPreview(item.id);
+                      }}
                       title="Listen to this radio station!"
                     >
                       {previewingRadio === item.id ? (
@@ -350,7 +525,10 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
                     <button
                       type="button"
                       className="preview-mini-btn"
-                      onClick={() => handlePreviewCelebration(item.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePreviewCelebration(item.id);
+                      }}
                       title="Preview this celebration!"
                     >
                       <PartyPopper size={14} /> Watch
@@ -386,13 +564,19 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
               <p className="shop-card-desc">{item.description}</p>
               <div className="shop-card-footer">
                 {equipped ? (
-                  <button className="shop-btn shop-btn--equipped" disabled>
+                  <button
+                    className="shop-btn shop-btn--equipped"
+                    disabled
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Check size={16} /> Equipped on {meta.shortName}
                   </button>
                 ) : owned ? (
                   <button
                     className="shop-btn shop-btn--equip"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearCategoryOverride(item.category);
                       if (item.category === 'sound') {
                         arcadeAudio.previewSound(item.id);
                       } else {
@@ -407,7 +591,9 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
                   <button
                     className="shop-btn shop-btn--buy"
                     disabled={!canAfford}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearCategoryOverride(item.category);
                       arcadeAudio.playVictory(
                         item.category === 'celebration' ? item.id : undefined
                       );
