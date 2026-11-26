@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { RacerLiveState, TeamId } from '../types';
 import { getTeamMeta } from '../data/shop';
 import {
+  drawBossCar,
   drawRacerCar,
   drawTrailParticle,
   spawnTrailParticle,
@@ -14,7 +15,48 @@ interface SpeedwayCanvasProps {
   totalLaps: number | null; // null in timed sprint
   myTeam: TeamId;
   turboBannerTeam: TeamId | null;
+  trackId?: string;
+  bossProgress?: number | null;
 }
+
+// Deterministic pseudo-random helper for crisp, flicker-free track scenery
+function seeded(i: number, salt: number): number {
+  const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+const CANDY_SPRINKLES = Array.from({ length: 68 }, (_, i) => ({
+  u: seeded(i, 1),
+  v: seeded(i, 2),
+  angle: seeded(i, 3) * Math.PI,
+  color: ['#f472b6', '#34d399', '#facc15', '#38bdf8', '#c084fc', '#ffffff'][
+    i % 6
+  ],
+}));
+
+const SNOWFLAKES = Array.from({ length: 56 }, (_, i) => ({
+  u: seeded(i, 11),
+  v: seeded(i, 12),
+  r: 1.4 + seeded(i, 13) * 2.4,
+  speed: 0.015 + seeded(i, 14) * 0.025,
+  phase: seeded(i, 15) * Math.PI * 2,
+}));
+
+const SPACE_STARS = Array.from({ length: 90 }, (_, i) => ({
+  u: seeded(i, 21),
+  v: seeded(i, 22),
+  r: 0.8 + seeded(i, 23) * 1.9,
+  phase: seeded(i, 24) * Math.PI * 2,
+  speed: 2 + seeded(i, 25) * 3.5,
+  color: ['#ffffff', '#e0e7ff', '#fde68a', '#f0abfc', '#bae6fd'][i % 5],
+}));
+
+const BEACH_SPECKLES = Array.from({ length: 48 }, (_, i) => ({
+  u: seeded(i, 31),
+  v: seeded(i, 32),
+  r: 1.2 + seeded(i, 33) * 1.8,
+  color: i % 5 === 0 ? '#fb7185' : i % 3 === 0 ? '#fef3c7' : '#d97706',
+}));
 
 /**
  * Computes (x, y, angle) along a stadium/oval speedway track for progress in laps (0..N).
@@ -81,16 +123,24 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
   totalLaps,
   myTeam,
   turboBannerTeam,
+  trackId = 'track-sunny',
+  bossProgress = null,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const myStateRef = useRef(myState);
   const oppStateRef = useRef(opponentState);
+  const trackIdRef = useRef(trackId);
+  const bossProgressRef = useRef<number | null>(bossProgress);
+  const bossWasActiveRef = useRef(bossProgress != null);
   const smoothMyProg = useRef(myState.progress);
   const smoothOppProg = useRef(opponentState.progress);
+  const smoothBossProg = useRef(bossProgress ?? 0);
   const particlesRef = useRef<TrailParticle[]>([]);
 
   myStateRef.current = myState;
   oppStateRef.current = opponentState;
+  trackIdRef.current = trackId;
+  bossProgressRef.current = bossProgress;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -125,20 +175,21 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
       // Smoothly interpolate car progress for silky 60fps racing!
       const m = myStateRef.current;
       const o = oppStateRef.current;
+      const activeTrackId = trackIdRef.current || 'track-sunny';
+      const bp = bossProgressRef.current;
+
       smoothMyProg.current += (m.progress - smoothMyProg.current) * Math.min(1, dt * 8);
       smoothOppProg.current += (o.progress - smoothOppProg.current) * Math.min(1, dt * 8);
 
-      // Background vibrant meadow grass
-      const grassGrad = ctx.createLinearGradient(0, 0, 0, height);
-      grassGrad.addColorStop(0, '#4ade80');
-      grassGrad.addColorStop(1, '#16a34a');
-      ctx.fillStyle = grassGrad;
-      ctx.fillRect(0, 0, width, height);
-
-      // Subtle grass stripes
-      ctx.fillStyle = 'rgba(255,255,255,0.06)';
-      for (let x = 0; x < width; x += 36) {
-        ctx.fillRect(x, 0, 18, height);
+      if (bp != null) {
+        if (!bossWasActiveRef.current) {
+          smoothBossProg.current = bp;
+          bossWasActiveRef.current = true;
+        } else {
+          smoothBossProg.current += (bp - smoothBossProg.current) * Math.min(1, dt * 8);
+        }
+      } else {
+        bossWasActiveRef.current = false;
       }
 
       // Track geometry
@@ -159,55 +210,335 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
         ctx.closePath();
       };
 
-      // Outer red/white speedway curb
+      // ==================== 1. TRACK THEME BACKGROUND ====================
+      if (activeTrackId === 'track-candy') {
+        // Pastel pink/mint frosting background
+        const candyGrad = ctx.createLinearGradient(0, 0, width, height);
+        candyGrad.addColorStop(0, '#fbcfe8');
+        candyGrad.addColorStop(0.5, '#f9a8d4');
+        candyGrad.addColorStop(1, '#a7f3d0');
+        ctx.fillStyle = candyGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        // Soft diagonal frosting stripes
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+        for (let x = -height; x < width + height; x += 42) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x + 18, 0);
+          ctx.lineTo(x + 18 - height * 0.35, height);
+          ctx.lineTo(x - height * 0.35, height);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Scattered pastel sprinkles
+        for (const s of CANDY_SPRINKLES) {
+          ctx.save();
+          ctx.translate(s.u * width, s.v * height);
+          ctx.rotate(s.angle);
+          ctx.fillStyle = s.color;
+          ctx.beginPath();
+          ctx.roundRect(-4.5, -1.7, 9, 3.4, 1.7);
+          ctx.fill();
+          ctx.restore();
+        }
+      } else if (activeTrackId === 'track-beach') {
+        // Sparkling turquoise ocean border
+        const oceanGrad = ctx.createLinearGradient(0, 0, 0, height);
+        oceanGrad.addColorStop(0, '#06b6d4');
+        oceanGrad.addColorStop(0.5, '#0ea5e9');
+        oceanGrad.addColorStop(1, '#0284c7');
+        ctx.fillStyle = oceanGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        // Gentle ocean wave shimmer lines
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.24)';
+        ctx.lineWidth = 2;
+        const waveShift = Math.sin(now / 700) * 8;
+        for (let y = 14; y < height; y += 26) {
+          ctx.beginPath();
+          for (let x = -10; x < width + 20; x += 36) {
+            ctx.moveTo(x + waveShift, y);
+            ctx.quadraticCurveTo(x + 9 + waveShift, y - 4, x + 18 + waveShift, y);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Outer shoreline foam & warm golden sand bank around the track
+        ctx.save();
+        traceOval(outerRadius + trackWidth * 0.68);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+        ctx.fill();
+        traceOval(outerRadius + trackWidth * 0.6);
+        const sandGrad = ctx.createLinearGradient(0, cy - outerRadius, 0, cy + outerRadius);
+        sandGrad.addColorStop(0, '#fef08a');
+        sandGrad.addColorStop(1, '#fcd34d');
+        ctx.fillStyle = sandGrad;
+        ctx.fill();
+
+        // Clip sand speckles & tiny starfish/shells to the sandy beach infield
+        traceOval(outerRadius - trackWidth * 0.54);
+        ctx.clip();
+        for (const sp of BEACH_SPECKLES) {
+          ctx.fillStyle = sp.color;
+          ctx.globalAlpha = 0.45;
+          ctx.beginPath();
+          ctx.arc(sp.u * width, sp.v * height, sp.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      } else if (activeTrackId === 'track-snow') {
+        // Crisp winter snowfield
+        const snowGrad = ctx.createLinearGradient(0, 0, 0, height);
+        snowGrad.addColorStop(0, '#f0f9ff');
+        snowGrad.addColorStop(0.5, '#e0f2fe');
+        snowGrad.addColorStop(1, '#bae6fd');
+        ctx.fillStyle = snowGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        // Subtle blue-white snowdrifts
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.52)';
+        ctx.beginPath();
+        ctx.ellipse(width * 0.2, height * 0.15, width * 0.28, height * 0.18, 0.1, 0, Math.PI * 2);
+        ctx.ellipse(width * 0.82, height * 0.86, width * 0.3, height * 0.2, -0.1, 0, Math.PI * 2);
+        ctx.ellipse(cx, cy, straightHalf + outerRadius * 0.5, outerRadius * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Soft drifting snowflakes
+        ctx.save();
+        for (const fl of SNOWFLAKES) {
+          const fy = ((fl.v + (now / 1000) * fl.speed) % 1) * height;
+          const fx =
+            ((fl.u + Math.sin(now / 1200 + fl.phase) * 0.015 + 1) % 1) * width;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+          ctx.beginPath();
+          ctx.arc(fx, fy, fl.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      } else if (activeTrackId === 'track-space') {
+        // Deep cosmic indigo/purple space
+        const spaceGrad = ctx.createLinearGradient(0, 0, width, height);
+        spaceGrad.addColorStop(0, '#09051a');
+        spaceGrad.addColorStop(0.5, '#1e1b4b');
+        spaceGrad.addColorStop(1, '#2e1065');
+        ctx.fillStyle = spaceGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        // Subtle cosmic nebula glows
+        const neb1 = ctx.createRadialGradient(
+          width * 0.2,
+          height * 0.25,
+          6,
+          width * 0.2,
+          height * 0.25,
+          width * 0.3
+        );
+        neb1.addColorStop(0, 'rgba(168, 85, 247, 0.26)');
+        neb1.addColorStop(1, 'rgba(168, 85, 247, 0)');
+        ctx.fillStyle = neb1;
+        ctx.fillRect(0, 0, width, height);
+
+        const neb2 = ctx.createRadialGradient(
+          width * 0.82,
+          height * 0.78,
+          6,
+          width * 0.82,
+          height * 0.78,
+          width * 0.32
+        );
+        neb2.addColorStop(0, 'rgba(56, 189, 248, 0.22)');
+        neb2.addColorStop(1, 'rgba(56, 189, 248, 0)');
+        ctx.fillStyle = neb2;
+        ctx.fillRect(0, 0, width, height);
+
+        // Twinkling stars
+        ctx.save();
+        for (const st of SPACE_STARS) {
+          const twinkle = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin((now / 1000) * st.speed + st.phase));
+          ctx.globalAlpha = twinkle;
+          ctx.fillStyle = st.color;
+          ctx.beginPath();
+          ctx.arc(st.u * width, st.v * height, st.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      } else {
+        // Default: 'track-sunny' — vibrant lush green meadow stripes
+        const grassGrad = ctx.createLinearGradient(0, 0, 0, height);
+        grassGrad.addColorStop(0, '#4ade80');
+        grassGrad.addColorStop(1, '#16a34a');
+        ctx.fillStyle = grassGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        for (let x = 0; x < width; x += 36) {
+          ctx.fillRect(x, 0, 18, height);
+        }
+      }
+
+      // ==================== 2. CURBS, ROAD SURFACE & LANE DASHES ====================
+      let curbColorA = '#ef4444';
+      let curbColorB = '#ffffff';
+      let roadColor = '#334155';
+      let laneDashColor = 'rgba(255,255,255,0.55)';
+      let emblemColor = 'rgba(255, 255, 255, 0.22)';
+
+      if (activeTrackId === 'track-candy') {
+        curbColorA = '#ec4899';
+        curbColorB = '#ffffff';
+        roadColor = '#5c3a21';
+        laneDashColor = '#fbcfe8';
+        emblemColor = 'rgba(131, 24, 67, 0.26)';
+      } else if (activeTrackId === 'track-beach') {
+        curbColorA = '#b45309';
+        curbColorB = '#fde68a';
+        roadColor = '#94a3b8';
+        laneDashColor = 'rgba(255, 251, 235, 0.78)';
+        emblemColor = 'rgba(146, 64, 14, 0.28)';
+      } else if (activeTrackId === 'track-snow') {
+        curbColorA = '#ef4444';
+        curbColorB = '#ffffff';
+        roadColor = '#4b6b8a';
+        laneDashColor = 'rgba(224, 242, 254, 0.85)';
+        emblemColor = 'rgba(3, 105, 161, 0.26)';
+      } else if (activeTrackId === 'track-space') {
+        roadColor = '#14132e';
+        laneDashColor = 'rgba(192, 132, 252, 0.82)';
+        emblemColor = 'rgba(216, 180, 254, 0.3)';
+      }
+
+      const makeRainbowGradient = () => {
+        const g = ctx.createLinearGradient(
+          cx - straightHalf - outerRadius,
+          cy - outerRadius,
+          cx + straightHalf + outerRadius,
+          cy + outerRadius
+        );
+        g.addColorStop(0, '#f43f5e');
+        g.addColorStop(0.2, '#f97316');
+        g.addColorStop(0.4, '#facc15');
+        g.addColorStop(0.6, '#22c55e');
+        g.addColorStop(0.8, '#38bdf8');
+        g.addColorStop(1, '#c084fc');
+        return g;
+      };
+
+      // Outer curb / track edge
       ctx.save();
       traceOval(outerRadius + trackWidth * 0.56);
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 8;
-      ctx.stroke();
-      ctx.setLineDash([14, 14]);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 8;
-      ctx.stroke();
+      if (activeTrackId === 'track-space') {
+        const rainbow = makeRainbowGradient();
+        ctx.strokeStyle = rainbow;
+        ctx.shadowColor = '#a855f7';
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 8;
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = curbColorA;
+        ctx.lineWidth = 8;
+        ctx.stroke();
+        ctx.setLineDash([14, 14]);
+        ctx.strokeStyle = curbColorB;
+        ctx.lineWidth = 8;
+        ctx.stroke();
+      }
       ctx.restore();
 
-      // Asphalt track surface
+      // Road surface
       ctx.save();
       traceOval(outerRadius);
-      ctx.strokeStyle = '#334155';
+      ctx.strokeStyle = roadColor;
       ctx.lineWidth = trackWidth;
       ctx.stroke();
 
+      // Extra surface detail for Snow (icy frost sheen) or Space (starry cosmic speckles)
+      if (activeTrackId === 'track-snow') {
+        traceOval(outerRadius);
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.18)';
+        ctx.lineWidth = trackWidth * 0.72;
+        ctx.stroke();
+      } else if (activeTrackId === 'track-space') {
+        ctx.save();
+        traceOval(outerRadius);
+        ctx.strokeStyle = 'rgba(139, 92, 246, 0.14)';
+        ctx.lineWidth = trackWidth * 0.85;
+        ctx.stroke();
+        // Faint stardust along the cosmic road
+        for (let i = 0; i < 24; i++) {
+          const sp = getTrackPoint(
+            i / 24 + 0.013,
+            cx,
+            cy,
+            straightHalf,
+            outerRadius + (seeded(i, 41) - 0.5) * trackWidth * 0.72
+          );
+          ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.45)' : 'rgba(192,132,252,0.5)';
+          ctx.beginPath();
+          ctx.arc(sp.x, sp.y, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
       // Center dashed lane divider
       traceOval(outerRadius);
-      ctx.setLineDash([16, 14]);
-      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
+      if (activeTrackId === 'track-candy') {
+        // Alternating pink & white lane dashes
+        ctx.setLineDash([14, 18]);
+        ctx.strokeStyle = '#f9a8d4';
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+        ctx.lineDashOffset = -16;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+      } else {
+        ctx.setLineDash([16, 14]);
+        ctx.strokeStyle = laneDashColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
       ctx.restore();
 
-      // Inner curb
+      // Inner curb / track edge
       ctx.save();
       traceOval(outerRadius - trackWidth * 0.54);
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 6;
-      ctx.stroke();
-      ctx.setLineDash([12, 12]);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 6;
-      ctx.stroke();
+      if (activeTrackId === 'track-space') {
+        const rainbow = makeRainbowGradient();
+        ctx.strokeStyle = rainbow;
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 6;
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = curbColorA;
+        ctx.lineWidth = 6;
+        ctx.stroke();
+        ctx.setLineDash([12, 12]);
+        ctx.strokeStyle = curbColorB;
+        ctx.lineWidth = 6;
+        ctx.stroke();
+      }
       ctx.restore();
 
       // Infield emblem
       ctx.save();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.fillStyle = emblemColor;
       ctx.font = `700 ${Math.max(13, Math.min(20, width * 0.028))}px Fredoka, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('DOGGY vs SLOTHY', cx, cy - 8);
       ctx.font = `700 ${Math.max(11, Math.min(14, width * 0.02))}px Nunito, sans-serif`;
       ctx.fillText(
-        totalLaps ? `${totalLaps}-LAP SPEEDWAY` : 'TIMED SPRINT SPEEDWAY',
+        bp != null
+          ? 'CO-OP VS MEGA-BOT 3000'
+          : totalLaps
+          ? `${totalLaps}-LAP SPEEDWAY`
+          : 'TIMED SPRINT SPEEDWAY',
         cx,
         cy + 12
       );
@@ -230,10 +561,11 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
         }
       }
 
-      // Compute lane radii (Doggy outer lane, Slothy inner lane — never overlap!)
+      // Compute lane radii (Doggy outer lane, Slothy inner lane, Mega-Bot middle lane)
       const laneOffset = trackWidth * 0.22;
       const doggyRadius = outerRadius + laneOffset;
       const slothyRadius = outerRadius - laneOffset;
+      const bossRadius = outerRadius;
 
       const doggyState = m.team === 'doggy' ? m : o;
       const slothyState = m.team === 'slothy' ? m : o;
@@ -242,6 +574,10 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
 
       const doggyPt = getTrackPoint(doggyProg, cx, cy, straightHalf, doggyRadius);
       const slothyPt = getTrackPoint(slothyProg, cx, cy, straightHalf, slothyRadius);
+      const bossPt =
+        bp != null
+          ? getTrackPoint(smoothBossProg.current, cx, cy, straightHalf, bossRadius)
+          : null;
 
       const nowEpoch = Date.now();
       const doggyTurbo = doggyState.turboUntil > nowEpoch;
@@ -277,6 +613,21 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
             )
           );
         }
+        if (bossPt && smoothBossProg.current > 0.005) {
+          const spread = (Math.random() - 0.5) * 0.6;
+          particlesRef.current.push({
+            x: bossPt.x - Math.cos(bossPt.angle) * 32 + (Math.random() - 0.5) * 6,
+            y: bossPt.y - Math.sin(bossPt.angle) * 32 + (Math.random() - 0.5) * 6,
+            vx: -Math.cos(bossPt.angle + spread) * 42,
+            vy: -Math.sin(bossPt.angle + spread) * 42,
+            life: 0,
+            maxLife: 0.52,
+            size: 5.5 + Math.random() * 3.5,
+            color: Math.random() < 0.5 ? '#a855f7' : '#e879f9',
+            kind: 'flame',
+            rotation: Math.random() * Math.PI * 2,
+          });
+        }
       }
 
       // Update & draw particles
@@ -303,9 +654,19 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
       drawRacerCar(ctx, 'slothy', slothyState.loadout, now, {
         turboActive: slothyTurbo,
         spinoutActive: slothySpin,
+        shieldActive: Boolean(slothyState.shieldActive),
         scale: carScale,
       });
       ctx.restore();
+
+      // Draw Mega-Bot 3000 Boss Car when active in Co-Op Boss mode
+      if (bossPt) {
+        ctx.save();
+        ctx.translate(bossPt.x, bossPt.y);
+        ctx.rotate(bossPt.angle);
+        drawBossCar(ctx, now, carScale * 1.04);
+        ctx.restore();
+      }
 
       // Draw Doggy
       ctx.save();
@@ -314,9 +675,32 @@ export const SpeedwayCanvas: React.FC<SpeedwayCanvasProps> = ({
       drawRacerCar(ctx, 'doggy', doggyState.loadout, now, {
         turboActive: doggyTurbo,
         spinoutActive: doggySpin,
+        shieldActive: Boolean(doggyState.shieldActive),
         scale: carScale,
       });
       ctx.restore();
+
+      // Draw floating "MEGA-BOT" purple badge above Mega-Bot 3000
+      if (bossPt) {
+        ctx.save();
+        ctx.fillStyle = '#7e22ce';
+        ctx.strokeStyle = '#f5d0fe';
+        ctx.lineWidth = 2;
+        const bossBadgeW = 72;
+        const bossBadgeH = 18;
+        const bbx = bossPt.x - bossBadgeW / 2;
+        const bby = bossPt.y - 38 * carScale;
+        ctx.beginPath();
+        ctx.roundRect(bbx, bby, bossBadgeW, bossBadgeH, 9);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '800 9.5px Nunito, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('MEGA-BOT', bossPt.x, bby + bossBadgeH / 2 + 0.5);
+        ctx.restore();
+      }
 
       // Draw floating "YOU" badge above the local player's car
       const myPt = myTeam === 'doggy' ? doggyPt : slothyPt;

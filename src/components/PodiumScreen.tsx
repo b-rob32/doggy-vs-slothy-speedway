@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import {
+  Award,
   CheckCircle2,
   Coins,
   Flame,
@@ -15,9 +16,12 @@ import {
   getCelebrationInfo,
   runCelebrationAnimation,
 } from '../engine/celebrations';
+import { TROPHY_BADGES } from '../engine/quests';
 
 interface PodiumScreenProps {
   summary: RaceSummary;
+  myName: string;
+  opponentName: string;
   headToHead: HeadToHeadRecord;
   totalCoins: number;
   rematchStatus: string | null;
@@ -28,6 +32,8 @@ interface PodiumScreenProps {
 
 export const PodiumScreen: React.FC<PodiumScreenProps> = ({
   summary,
+  myName,
+  opponentName,
   headToHead,
   totalCoins,
   rematchStatus,
@@ -35,30 +41,50 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
   onOpenGarage,
   onGoHome,
 }) => {
+  const isBoss = summary.mode === 'coop-boss';
   const winnerTeam =
-    summary.result === 'win'
+    isBoss || summary.result === 'win' || summary.result === 'tie'
       ? summary.myTeam
-      : summary.result === 'loss'
-      ? summary.opponentTeam
-      : summary.myTeam;
-  const winnerMeta = getTeamMeta(winnerTeam);
+      : summary.opponentTeam;
+
+  const winnerCustomName =
+    winnerTeam === summary.myTeam ? myName : opponentName;
+  const winnerMeta = getTeamMeta(winnerTeam, winnerCustomName);
 
   const celebrationId =
-    summary.result === 'loss'
+    summary.result === 'loss' && !isBoss
       ? summary.opponentState.loadout.celebrationId || 'cel-confetti'
       : summary.myState.loadout.celebrationId || 'cel-confetti';
   const celInfo = getCelebrationInfo(celebrationId);
 
   useEffect(() => {
+    if (isBoss && summary.result === 'loss') return;
     return runCelebrationAnimation(celebrationId, winnerTeam);
-  }, [celebrationId, winnerTeam]);
+  }, [celebrationId, isBoss, summary.result, winnerTeam]);
 
-  const titleText =
-    summary.result === 'win'
-      ? `${winnerMeta.name} WINS! 🏆`
-      : summary.result === 'tie'
-      ? `PHOTO FINISH TIE! 🤝`
-      : `${winnerMeta.name} Took 1st Place!`;
+  const titleText = isBoss
+    ? summary.result === 'win'
+      ? 'DOGGY & SLOTHY BEAT MEGA-BOT! 🤖💥'
+      : 'MEGA-BOT 3000 WON THIS ROUND!'
+    : summary.result === 'win'
+    ? `${winnerMeta.name} WINS! 🏆`
+    : summary.result === 'tie'
+    ? 'PHOTO FINISH TIE! 🤝'
+    : `${winnerMeta.name} Took 1st Place!`;
+
+  const subtitleText = isBoss
+    ? summary.result === 'win'
+      ? 'Unstoppable sister teamwork! Mega-Bot 3000 is no match for your math!'
+      : 'So close! Team up again and blast past Mega-Bot next race!'
+    : summary.result === 'win'
+    ? 'Incredible math speed! You zoomed across the finish line!'
+    : summary.result === 'tie'
+    ? 'What an unbelievable neck-and-neck race!'
+    : 'Awesome racing! Every race earns Speed Coins & builds your skills!';
+
+  const newBadges = (summary.newlyUnlockedBadges ?? [])
+    .map((id) => TROPHY_BADGES.find((b) => b.id === id))
+    .filter(Boolean);
 
   return (
     <div className="screen podium-screen">
@@ -77,34 +103,48 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
         />
         <div className="podium-title-wrap">
           <div className="podium-badge">
-            <Trophy size={16} /> {celInfo.banner}
+            <Trophy size={16} />{' '}
+            {isBoss ? '🤖 CO-OP BOSS BATTLE' : celInfo.banner}
           </div>
           <h1>{titleText}</h1>
-          <p>
-            {summary.result === 'win'
-              ? 'Incredible math speed! You zoomed across the finish line!'
-              : summary.result === 'tie'
-              ? 'What an unbelievable neck-and-neck race!'
-              : 'Awesome racing! Every race earns Speed Coins & builds your skills!'}
-          </p>
+          <p>{subtitleText}</p>
         </div>
       </div>
 
+      {/* Newly Unlocked Badges Banner */}
+      {newBadges.length > 0 && (
+        <div className="new-badges-banner">
+          <Award size={20} />
+          <div>
+            <strong>NEW TROPHY UNLOCKED!</strong>
+            <div className="new-badges-list">
+              {newBadges.map((b) => (
+                <span key={b!.id} className="new-badge-chip">
+                  {b!.emoji} {b!.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Head to Head Banner */}
-      <div className="h2h-strip">
-        <div className="h2h-side h2h-doggy">
-          <span>🐶 Doggy</span>
-          <strong>{headToHead.doggyWins}</strong>
+      {!isBoss && (
+        <div className="h2h-strip">
+          <div className="h2h-side h2h-doggy">
+            <span>🐶 Doggy</span>
+            <strong>{headToHead.doggyWins}</strong>
+          </div>
+          <div className="h2h-center">
+            <Trophy size={16} />
+            <span>SERIES SCORE</span>
+          </div>
+          <div className="h2h-side h2h-slothy">
+            <strong>{headToHead.slothyWins}</strong>
+            <span>Slothy 🦥</span>
+          </div>
         </div>
-        <div className="h2h-center">
-          <Trophy size={16} />
-          <span>SERIES SCORE</span>
-        </div>
-        <div className="h2h-side h2h-slothy">
-          <strong>{headToHead.slothyWins}</strong>
-          <span>Slothy 🦥</span>
-        </div>
-      </div>
+      )}
 
       {/* Race Stats & Coin Rewards */}
       <div className="podium-grid">
@@ -163,9 +203,15 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
               </li>
             )}
             <li>
-              <span>Podium Reward</span>
+              <span>{isBoss ? 'Boss Battle Reward' : 'Podium Reward'}</span>
               <strong>+{summary.coins.podiumBonus}</strong>
             </li>
+            {summary.coins.powerUpBonus > 0 && (
+              <li className="coin-line-perk">
+                <span>Coin Burst Power-Up! 🧲</span>
+                <strong>+{summary.coins.powerUpBonus}</strong>
+              </li>
+            )}
             {summary.coins.perkMultiplierBonus > 0 && (
               <li className="coin-line-perk">
                 <span>Garage Coin Perk Bonus!</span>
@@ -184,8 +230,7 @@ export const PodiumScreen: React.FC<PodiumScreenProps> = ({
         <div className="missed-card">
           <h3>📝 Quick Practice Review</h3>
           <p className="missed-hint">
-            Here are the tricky ones from this race — you&apos;ll crush them next
-            time!
+            Smart Practice saved these so you&apos;ll crush them next time!
           </p>
           <div className="missed-chips">
             {summary.missedQuestions.slice(0, 8).map((m, i) => (

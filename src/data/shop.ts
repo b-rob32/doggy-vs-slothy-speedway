@@ -197,6 +197,53 @@ export const SHOP_ITEMS: ShopItem[] = [
     perks: {},
   },
 
+  // ================= RACE TRACKS / THEMES =================
+  {
+    id: 'track-sunny',
+    category: 'track',
+    name: 'Sunny Speedway',
+    description: 'Classic lush green meadow oval with bright red-and-white curbs!',
+    perkLabel: 'Starter Track',
+    price: 0,
+    perks: {},
+  },
+  {
+    id: 'track-candy',
+    category: 'track',
+    name: 'Candy Kingdom',
+    description: 'Sweet strawberry frosting infield, peppermint curbs & sprinkled chocolate road!',
+    perkLabel: 'Sweet Theme Track',
+    price: 110,
+    perks: {},
+  },
+  {
+    id: 'track-beach',
+    category: 'track',
+    name: 'Beach Boardwalk',
+    description: 'Sparkling turquoise waves, golden sand & sunny seaside boardwalk!',
+    perkLabel: 'Beach Theme Track',
+    price: 140,
+    perks: {},
+  },
+  {
+    id: 'track-snow',
+    category: 'track',
+    name: 'Snowy Drift Park',
+    description: 'Winter wonderland snowfield, icy blue circuit & evergreen pines!',
+    perkLabel: 'Winter Theme Track',
+    price: 170,
+    perks: {},
+  },
+  {
+    id: 'track-space',
+    category: 'track',
+    name: 'Rainbow Space Circuit',
+    description: 'Twinkling galaxy stars & a glowing neon cosmic speedway!',
+    perkLabel: 'Cosmic Rainbow Track',
+    price: 240,
+    perks: {},
+  },
+
   // ================= CAR SOUNDS =================
   {
     id: 'sound-classic',
@@ -353,6 +400,7 @@ export const DEFAULT_LOADOUT: EquippedLoadout = {
   gearId: 'gear-stock',
   accessoryId: 'acc-none',
   trailId: 'trail-classic',
+  trackId: 'track-sunny',
   soundId: 'sound-classic',
   radioId: 'radio-pop',
   celebrationId: 'cel-confetti',
@@ -363,6 +411,7 @@ export const DEFAULT_UNLOCKED_IDS = [
   'gear-stock',
   'acc-none',
   'trail-classic',
+  'track-sunny',
   'sound-classic',
   'radio-off',
   'radio-pop',
@@ -419,11 +468,12 @@ export function getEffectivePerks(
   };
 }
 
-export function getTeamMeta(team: TeamId) {
+export function getTeamMeta(team: TeamId, customName?: string) {
+  const trimmed = customName?.trim();
   if (team === 'doggy') {
     return {
-      name: 'Team Doggy',
-      shortName: 'Doggy',
+      name: trimmed ? `Team Doggy (${trimmed})` : 'Team Doggy',
+      shortName: trimmed || 'Doggy',
       primary: '#e11d48',
       secondary: '#f59e0b',
       lightBg: '#fff1f2',
@@ -436,8 +486,8 @@ export function getTeamMeta(team: TeamId) {
     };
   }
   return {
-    name: 'Team Slothy',
-    shortName: 'Slothy',
+    name: trimmed ? `Team Slothy (${trimmed})` : 'Team Slothy',
+    shortName: trimmed || 'Slothy',
     primary: '#0d9488',
     secondary: '#10b981',
     lightBg: '#f0fdfa',

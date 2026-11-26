@@ -1714,3 +1714,298 @@ button:disabled {
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
+
+/* ==================== CO-OP BOSS, POWER-UPS, QUESTS, BADGES & NAMES ==================== */
+.arcade-btn--boss {
+  background: linear-gradient(135deg, #9333ea, #6d28d9);
+  box-shadow: 0 5px 0 #4c1d95;
+}
+
+.boss-banner {
+  background: linear-gradient(135deg, #581c87, #7e22ce);
+  color: #ffffff;
+  border-radius: 18px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 8px 20px rgba(88, 28, 135, 0.25);
+}
+
+.boss-banner strong {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1.08rem;
+  color: #fde047;
+}
+
+.boss-banner span {
+  font-size: 0.86rem;
+  opacity: 0.94;
+}
+
+.racer-bars--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.racer-bar--boss .racer-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #a855f7, #6d28d9);
+  transition: width 0.2s ease;
+}
+
+.hud-pill--shield {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #38bdf8;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.powerup-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fef08a, #f59e0b);
+  color: #78350f;
+  border: 3px solid #ffffff;
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.35);
+  animation: popIn 0.3s ease;
+}
+
+.powerup-emoji {
+  font-size: 1.7rem;
+}
+
+.powerup-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.powerup-text strong {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1.05rem;
+}
+
+.powerup-text span {
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.smart-review-pill {
+  background: #ede9fe;
+  color: #5b21b6;
+  border: 2px solid #c4b5fd;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.new-badges-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #fef9c3, #fde047);
+  color: #78350f;
+  border: 3px solid #eab308;
+  border-radius: 18px;
+  padding: 12px 16px;
+  box-shadow: var(--shadow);
+}
+
+.new-badges-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.new-badge-chip {
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-weight: 900;
+  font-size: 0.82rem;
+}
+
+/* Custom Racer Name Input on Home Cards */
+.racer-name-row {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.racer-name-input {
+  width: 100%;
+  max-width: 150px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 2px solid #cbd5e1;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+}
+
+.racer-name-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+/* Daily Quests Panel */
+.quests-card {
+  background: #ffffff;
+  border-radius: var(--radius);
+  border: 3px solid #e2e8f0;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+.quests-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.quests-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quest-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #f8fafc;
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.quest-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.quest-title {
+  font-weight: 800;
+  font-size: 0.88rem;
+  margin-bottom: 5px;
+}
+
+.quest-bar-bg {
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.quest-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #22c55e);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.quest-claim-btn {
+  background: linear-gradient(135deg, #facc15, #f59e0b);
+  color: #78350f;
+  padding: 7px 12px;
+  border-radius: 12px;
+  font-weight: 900;
+  font-size: 0.8rem;
+  box-shadow: 0 3px 0 #b45309;
+  white-space: nowrap;
+}
+
+.quest-claimed-pill {
+  background: #dcfce7;
+  color: #166534;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.quest-progress-text {
+  font-weight: 800;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Trophy Shelf & Smart Coach on Stats Screen */
+.trophy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.trophy-card {
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.trophy-card--earned {
+  background: linear-gradient(135deg, #fefce8, #fef9c3);
+  border-color: #facc15;
+  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.18);
+}
+
+.trophy-card--locked {
+  opacity: 0.55;
+  filter: grayscale(0.8);
+}
+
+.trophy-emoji {
+  font-size: 1.9rem;
+}
+
+.trophy-card strong {
+  font-size: 0.88rem;
+}
+
+.trophy-card small {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.track-swatch {
+  height: 16px;
+  border-radius: 999px;
+  margin-bottom: 6px;
+  border: 2px solid rgba(15, 23, 42, 0.15);
+}
+
+@media (max-width: 600px) {
+  .racer-bars--3 {
+    grid-template-columns: 1fr;
+  }
+}

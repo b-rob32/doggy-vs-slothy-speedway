@@ -1,5 +1,7 @@
 export type TeamId = 'doggy' | 'slothy';
 
+export type GameMode = 'solo' | 'multiplayer' | 'coop-boss';
+
 export type Operation =
   | 'addition'
   | 'subtraction'
@@ -19,11 +21,14 @@ export type LapPreset = 'quick' | 'standard' | 'long';
 
 export type CpuDifficulty = 'easy' | 'medium' | 'fast';
 
+export type PowerUpType = 'shield' | 'mushroom' | 'coin-burst';
+
 export interface PlayerMathConfig {
   operation: Operation;
   difficulty: Difficulty;
-  timesTableFocus: number | null; // 2..12 when operation === 'multiplication'
+  timesTableFocus: number | null;
   inputMode: InputMode;
+  smartPractice: boolean;
 }
 
 export interface RaceConfig {
@@ -32,6 +37,8 @@ export interface RaceConfig {
   sprintSeconds: number;
   sharedMath: boolean;
   fairRaceNoPerks: boolean;
+  powerUpsEnabled: boolean;
+  trackId: string;
   hostMath: PlayerMathConfig;
   guestMath: PlayerMathConfig;
   cpuDifficulty: CpuDifficulty;
@@ -45,10 +52,12 @@ export interface MathProblem {
   symbol: '+' | '-' | '×' | '÷';
   answer: number;
   choices: number[];
+  isSmartReview?: boolean;
 }
 
 export interface MissedQuestion {
   prompt: string;
+  factKey: string;
   correctAnswer: number;
   givenAnswer: number;
   operation: SingleOperation;
@@ -59,16 +68,17 @@ export type ShopCategory =
   | 'gear'
   | 'accessory'
   | 'trail'
+  | 'track'
   | 'sound'
   | 'radio'
   | 'celebration';
 
 export interface ShopPerks {
-  speedBonus?: number; // e.g., 0.08 = +8% progress per correct answer
-  turboBonus?: number; // e.g., 0.25 = +25% extra turbo boost distance
-  spinoutReduction?: number; // e.g., 0.35 = 35% shorter spin-out recovery
-  turboStreakReq?: number; // e.g., 2 instead of default 3
-  coinMultiplier?: number; // e.g., 0.25 = +25% coins earned
+  speedBonus?: number;
+  turboBonus?: number;
+  spinoutReduction?: number;
+  turboStreakReq?: number;
+  coinMultiplier?: number;
 }
 
 export interface ShopItem {
@@ -87,9 +97,25 @@ export interface EquippedLoadout {
   gearId: string;
   accessoryId: string;
   trailId: string;
+  trackId: string;
   soundId: string;
   radioId: string;
   celebrationId: string;
+}
+
+export interface DailyQuest {
+  id: string;
+  title: string;
+  target: number;
+  progress: number;
+  reward: number;
+  claimed: boolean;
+  kind: 'solve' | 'streak' | 'win' | 'accuracy' | 'mult-div' | 'boss';
+}
+
+export interface DailyQuestState {
+  dateKey: string; // YYYY-MM-DD
+  quests: DailyQuest[];
 }
 
 export interface OperationStat {
@@ -102,18 +128,20 @@ export interface CareerStats {
   wins: number;
   losses: number;
   ties: number;
+  bossWins: number;
   totalQuestions: number;
   totalCorrect: number;
   totalWrong: number;
   bestQpm: number;
   longestStreak: number;
+  perfectRaces: number;
   byOperation: Record<SingleOperation, OperationStat>;
 }
 
 export interface RaceRecord {
   id: string;
   date: string;
-  mode: 'solo' | 'multiplayer';
+  mode: GameMode;
   format: RaceFormat;
   operation: Operation;
   difficulty: Difficulty;
@@ -129,11 +157,15 @@ export interface RaceRecord {
 
 export interface TeamProfile {
   team: TeamId;
+  racerName: string; // Optional custom daughter name!
   coins: number;
   unlockedIds: string[];
   equipped: EquippedLoadout;
   stats: CareerStats;
   recentRaces: RaceRecord[];
+  missedFactCounts: Record<string, number>; // e.g., "multiplication:7:8": 3
+  dailyQuests: DailyQuestState;
+  badges: string[]; // unlocked trophy badge IDs
 }
 
 export interface HeadToHeadRecord {
@@ -158,6 +190,7 @@ export interface RacerLiveState {
   bestStreak: number;
   turboUntil: number;
   spinoutUntil: number;
+  shieldActive?: boolean;
   finished: boolean;
   finishTimeMs: number | null;
   loadout: EquippedLoadout;
@@ -169,6 +202,7 @@ export interface CoinBreakdown {
   streakBonus: number;
   accuracyBonus: number;
   podiumBonus: number;
+  powerUpBonus: number;
   perkMultiplierBonus: number;
   total: number;
 }
@@ -176,41 +210,50 @@ export interface CoinBreakdown {
 export interface RaceSummary {
   myTeam: TeamId;
   opponentTeam: TeamId;
-  mode: 'solo' | 'multiplayer';
+  mode: GameMode;
   config: RaceConfig;
   myMathConfig: PlayerMathConfig;
   result: 'win' | 'loss' | 'tie';
   myState: RacerLiveState;
   opponentState: RacerLiveState;
+  bossProgress?: number;
   durationMs: number;
   qpm: number;
   accuracy: number;
   missedQuestions: MissedQuestion[];
+  masteredFactKeys: string[];
   coins: CoinBreakdown;
   perOperationCounts: Record<SingleOperation, OperationStat>;
+  newlyUnlockedBadges?: string[];
 }
 
 export type PeerMessage =
   | {
       type: 'hello';
       team: TeamId;
+      racerName: string;
       loadout: EquippedLoadout;
     }
   | {
       type: 'lobby-state';
+      mode: GameMode;
       config: RaceConfig;
       hostTeam: TeamId;
+      hostName: string;
       hostLoadout: EquippedLoadout;
       guestTeam: TeamId;
+      guestName: string;
       guestLoadout: EquippedLoadout;
     }
   | {
       type: 'guest-update';
       guestMath: PlayerMathConfig;
+      guestName: string;
       loadout: EquippedLoadout;
     }
   | {
       type: 'start-race';
+      mode: GameMode;
       startAt: number;
       config: RaceConfig;
     }
@@ -223,6 +266,7 @@ export type PeerMessage =
       bestStreak: number;
       turboActive: boolean;
       spinoutActive: boolean;
+      shieldActive?: boolean;
       finished: boolean;
       finishTimeMs: number | null;
     }

@@ -177,10 +177,143 @@ function generateSingle(
   };
 }
 
+export function makeFactKey(
+  operation: SingleOperation,
+  a: number,
+  b: number
+): string {
+  return `${operation}:${a}:${b}`;
+}
+
+function buildProblemFromFact(
+  operation: SingleOperation,
+  a: number,
+  b: number,
+  isSmartReview: boolean
+): MathProblem | null {
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) {
+    return null;
+  }
+
+  let symbol: '+' | '-' | '×' | '÷';
+  let answer: number;
+
+  switch (operation) {
+    case 'addition':
+      symbol = '+';
+      answer = a + b;
+      break;
+    case 'subtraction':
+      if (a < b) return null;
+      symbol = '-';
+      answer = a - b;
+      break;
+    case 'multiplication':
+      symbol = '×';
+      answer = a * b;
+      break;
+    case 'division':
+      if (b === 0 || a % b !== 0) return null;
+      symbol = '÷';
+      answer = a / b;
+      break;
+    default:
+      return null;
+  }
+
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    a,
+    b,
+    operation,
+    symbol,
+    answer,
+    choices: buildChoices(answer, operation, a, b),
+    isSmartReview,
+  };
+}
+
+function tryPickSmartReviewProblem(
+  config: PlayerMathConfig,
+  lastPrompt?: string,
+  missedFactCounts?: Record<string, number>
+): MathProblem | null {
+  if (!config.smartPractice || !missedFactCounts) return null;
+
+  const candidates: Array<{
+    op: SingleOperation;
+    a: number;
+    b: number;
+    weight: number;
+  }> = [];
+
+  for (const [key, count] of Object.entries(missedFactCounts)) {
+    if (!count || count <= 0) continue;
+    const parts = key.split(':');
+    if (parts.length !== 3) continue;
+
+    const op = parts[0] as SingleOperation;
+    if (
+      op !== 'addition' &&
+      op !== 'subtraction' &&
+      op !== 'multiplication' &&
+      op !== 'division'
+    ) {
+      continue;
+    }
+
+    if (config.operation !== 'mixed' && op !== config.operation) {
+      continue;
+    }
+
+    const a = Number(parts[1]);
+    const b = Number(parts[2]);
+    const symbol =
+      op === 'addition'
+        ? '+'
+        : op === 'subtraction'
+          ? '-'
+          : op === 'multiplication'
+            ? '×'
+            : '÷';
+
+    if (`${a} ${symbol} ${b}` === lastPrompt) continue;
+
+    candidates.push({ op, a, b, weight: count });
+  }
+
+  if (candidates.length === 0 || Math.random() >= 0.35) {
+    return null;
+  }
+
+  const totalWeight = candidates.reduce((sum, item) => sum + item.weight, 0);
+  let roll = Math.random() * totalWeight;
+  let chosen = candidates[candidates.length - 1];
+  for (const candidate of candidates) {
+    roll -= candidate.weight;
+    if (roll <= 0) {
+      chosen = candidate;
+      break;
+    }
+  }
+
+  return buildProblemFromFact(chosen.op, chosen.a, chosen.b, true);
+}
+
 export function generateProblem(
   config: PlayerMathConfig,
-  lastPrompt?: string
+  lastPrompt?: string,
+  missedFactCounts?: Record<string, number>
 ): MathProblem {
+  const smartProblem = tryPickSmartReviewProblem(
+    config,
+    lastPrompt,
+    missedFactCounts
+  );
+  if (smartProblem) {
+    return smartProblem;
+  }
+
   const ops: SingleOperation[] = [
     'addition',
     'subtraction',

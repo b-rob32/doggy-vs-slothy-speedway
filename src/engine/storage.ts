@@ -14,6 +14,13 @@ import {
   DEFAULT_UNLOCKED_IDS,
   getEffectivePerks,
 } from '../data/shop';
+import {
+  createDailyQuests,
+  ensureFreshDailyQuests,
+  evaluateBadges,
+  getTodayKey,
+  updateDailyQuestsAfterRace,
+} from './quests';
 
 const STORAGE_KEY = 'doggy-vs-slothy-speedway-save-v1';
 
@@ -23,11 +30,13 @@ function emptyStats(): CareerStats {
     wins: 0,
     losses: 0,
     ties: 0,
+    bossWins: 0,
     totalQuestions: 0,
     totalCorrect: 0,
     totalWrong: 0,
     bestQpm: 0,
     longestStreak: 0,
+    perfectRaces: 0,
     byOperation: {
       addition: { correct: 0, total: 0 },
       subtraction: { correct: 0, total: 0 },
@@ -40,11 +49,15 @@ function emptyStats(): CareerStats {
 function createDefaultProfile(team: TeamId): TeamProfile {
   return {
     team,
+    racerName: '',
     coins: 60, // friendly starter allowance!
     unlockedIds: [...DEFAULT_UNLOCKED_IDS],
     equipped: { ...DEFAULT_LOADOUT },
     stats: emptyStats(),
     recentRaces: [],
+    missedFactCounts: {},
+    dailyQuests: createDailyQuests(getTodayKey()),
+    badges: [],
   };
 }
 
@@ -94,6 +107,10 @@ function mergeProfile(
   if (!loaded) return fallback;
   return {
     team: fallback.team,
+    racerName:
+      typeof loaded.racerName === 'string'
+        ? loaded.racerName
+        : fallback.racerName,
     coins: typeof loaded.coins === 'number' ? loaded.coins : fallback.coins,
     unlockedIds: Array.isArray(loaded.unlockedIds)
       ? Array.from(new Set([...DEFAULT_UNLOCKED_IDS, ...loaded.unlockedIds]))
@@ -111,6 +128,14 @@ function mergeProfile(
       },
     },
     recentRaces: Array.isArray(loaded.recentRaces) ? loaded.recentRaces : [],
+    missedFactCounts:
+      loaded.missedFactCounts && typeof loaded.missedFactCounts === 'object'
+        ? { ...loaded.missedFactCounts }
+        : {},
+    dailyQuests: ensureFreshDailyQuests(loaded.dailyQuests),
+    badges: Array.isArray(loaded.badges)
+      ? Array.from(new Set(loaded.badges))
+      : [],
   };
 }
 
@@ -128,7 +153,8 @@ export function calculateCoins(
   wrongCount: number,
   bestStreak: number,
   loadout: EquippedLoadout,
-  fairRaceNoPerks: boolean
+  fairRaceNoPerks: boolean,
+  powerUpBonus = 0
 ): CoinBreakdown {
   const baseCompletion = 20;
   const correctBonus = correctCount * 3;
@@ -139,7 +165,12 @@ export function calculateCoins(
   const podiumBonus = result === 'win' ? 35 : result === 'tie' ? 20 : 10;
 
   const subtotal =
-    baseCompletion + correctBonus + streakBonus + accuracyBonus + podiumBonus;
+    baseCompletion +
+    correctBonus +
+    streakBonus +
+    accuracyBonus +
+    podiumBonus +
+    powerUpBonus;
 
   const perks = getEffectivePerks(loadout, fairRaceNoPerks);
   const perkMultiplierBonus = Math.round(subtotal * perks.coinMultiplier);
@@ -150,6 +181,7 @@ export function calculateCoins(
     streakBonus,
     accuracyBonus,
     podiumBonus,
+    powerUpBonus,
     perkMultiplierBonus,
     total: subtotal + perkMultiplierBonus,
   };
@@ -197,6 +229,30 @@ export function recordRaceInSave(
     },
   };
 
+  const nextMissedFacts: Record<string, number> = {
+    ...(profile.missedFactCounts ?? {}),
+  };
+  for (const missed of summary.missedQuestions) {
+    if (missed.factKey) {
+      nextMissedFacts[missed.factKey] =
+        (nextMissedFacts[missed.factKey] ?? 0) + 1;
+    }
+  }
+  for (const key of summary.masteredFactKeys) {
+    if (nextMissedFacts[key]) {
+      if (nextMissedFacts[key] <= 1) {
+        delete nextMissedFacts[key];
+      } else {
+        nextMissedFacts[key] -= 1;
+      }
+    }
+  }
+
+  const isBossWin =
+    summary.mode === 'coop-boss' && summary.result === 'win';
+  const isPerfectRace =
+    summary.accuracy === 100 && summary.myState.correctCount >= 8;
+
   const updatedProfile: TeamProfile = {
     ...profile,
     coins: profile.coins + summary.coins.total,
@@ -205,6 +261,7 @@ export function recordRaceInSave(
       wins: profile.stats.wins + (summary.result === 'win' ? 1 : 0),
       losses: profile.stats.losses + (summary.result === 'loss' ? 1 : 0),
       ties: profile.stats.ties + (summary.result === 'tie' ? 1 : 0),
+      bossWins: profile.stats.bossWins + (isBossWin ? 1 : 0),
       totalQuestions:
         profile.stats.totalQuestions +
         summary.myState.correctCount +
@@ -216,6 +273,7 @@ export function recordRaceInSave(
         profile.stats.longestStreak,
         summary.myState.bestStreak
       ),
+      perfectRaces: profile.stats.perfectRaces + (isPerfectRace ? 1 : 0),
       byOperation: nextByOp,
     },
     recentRaces: [
@@ -237,16 +295,22 @@ export function recordRaceInSave(
       },
       ...profile.recentRaces,
     ].slice(0, 30),
+    missedFactCounts: nextMissedFacts,
+    dailyQuests: updateDailyQuestsAfterRace(profile.dailyQuests, summary),
   };
 
+  updatedProfile.badges = evaluateBadges(updatedProfile);
+
   const nextH2H = { ...save.headToHead };
-  if (summary.result === 'tie') {
-    nextH2H.ties += 1;
-  } else {
-    const winnerTeam =
-      summary.result === 'win' ? summary.myTeam : summary.opponentTeam;
-    if (winnerTeam === 'doggy') nextH2H.doggyWins += 1;
-    else nextH2H.slothyWins += 1;
+  if (summary.mode !== 'coop-boss') {
+    if (summary.result === 'tie') {
+      nextH2H.ties += 1;
+    } else {
+      const winnerTeam =
+        summary.result === 'win' ? summary.myTeam : summary.opponentTeam;
+      if (winnerTeam === 'doggy') nextH2H.doggyWins += 1;
+      else nextH2H.slothyWins += 1;
+    }
   }
 
   return {
@@ -255,6 +319,47 @@ export function recordRaceInSave(
     profiles: {
       ...save.profiles,
       [team]: updatedProfile,
+    },
+  };
+}
+
+export function claimQuestReward(
+  save: SaveData,
+  team: TeamId,
+  questId: string
+): SaveData {
+  const profile = save.profiles[team];
+  const dailyQuests = ensureFreshDailyQuests(profile.dailyQuests);
+  let rewardEarned = 0;
+
+  const nextQuests = dailyQuests.quests.map((quest) => {
+    if (
+      quest.id === questId &&
+      !quest.claimed &&
+      quest.progress >= quest.target
+    ) {
+      rewardEarned = quest.reward;
+      return { ...quest, claimed: true };
+    }
+    return quest;
+  });
+
+  if (rewardEarned === 0) {
+    return save;
+  }
+
+  return {
+    ...save,
+    profiles: {
+      ...save.profiles,
+      [team]: {
+        ...profile,
+        coins: profile.coins + rewardEarned,
+        dailyQuests: {
+          ...dailyQuests,
+          quests: nextQuests,
+        },
+      },
     },
   };
 }

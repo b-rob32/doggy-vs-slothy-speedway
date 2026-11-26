@@ -26,10 +26,16 @@ export function drawRacerCar(
   options: {
     turboActive?: boolean;
     spinoutActive?: boolean;
+    shieldActive?: boolean;
     scale?: number;
   } = {}
 ) {
-  const { turboActive = false, spinoutActive = false, scale = 1 } = options;
+  const {
+    turboActive = false,
+    spinoutActive = false,
+    shieldActive = false,
+    scale = 1,
+  } = options;
 
   ctx.save();
   ctx.scale(scale, scale);
@@ -208,7 +214,365 @@ export function drawRacerCar(
   drawAccessory(ctx, loadout.accessoryId, turboActive && !isDoggy);
 
   ctx.restore();
+
+  // Protective Star-Shield bubble around car when shieldActive is true
+  if (shieldActive) {
+    drawShieldBubble(ctx, timeMs);
+  }
+
   ctx.restore();
+}
+
+function drawShieldBubble(ctx: CanvasRenderingContext2D, timeMs: number) {
+  const pulse = 1 + Math.sin(timeMs / 170) * 0.045;
+  const rx = 38 * pulse;
+  const ry = 25 * pulse;
+
+  ctx.save();
+
+  // Translucent cyan/gold energy bubble fill
+  const grad = ctx.createRadialGradient(0, 0, 6, 0, 0, rx);
+  grad.addColorStop(0, 'rgba(56, 189, 248, 0.08)');
+  grad.addColorStop(0.58, 'rgba(34, 211, 238, 0.22)');
+  grad.addColorStop(0.84, 'rgba(250, 204, 21, 0.34)');
+  grad.addColorStop(1, 'rgba(125, 211, 252, 0.52)');
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Outer glowing cyan ring
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
+  ctx.lineWidth = 2.4;
+  ctx.shadowColor = '#38bdf8';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Inner shimmering gold accent ring
+  ctx.shadowColor = '#facc15';
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = 'rgba(254, 240, 138, 0.8)';
+  ctx.lineWidth = 1.4;
+  ctx.setLineDash([8, 10]);
+  ctx.lineDashOffset = -(timeMs / 28);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx - 2.5, ry - 2, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Glossy specular bubble highlight
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx - 5, ry - 4.5, 0, -Math.PI * 0.78, -Math.PI * 0.42);
+  ctx.stroke();
+
+  // Orbiting gold & cyan protective stars around the shield perimeter
+  const starCount = 3;
+  for (let i = 0; i < starCount; i++) {
+    const theta = timeMs / 460 + (i * Math.PI * 2) / starCount;
+    const sx = Math.cos(theta) * (rx + 1);
+    const sy = Math.sin(theta) * (ry + 1);
+    const starScale = 0.85 + Math.sin(timeMs / 130 + i * 2) * 0.25;
+    drawMiniStar(
+      ctx,
+      sx,
+      sy,
+      5.2 * starScale,
+      i % 2 === 0 ? '#fef08a' : '#67e8f9',
+      '#f59e0b'
+    );
+  }
+
+  ctx.restore();
+}
+
+function drawMiniStar(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  fill: string,
+  stroke: string
+) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const a = (i * Math.PI * 2) / 5 - Math.PI / 2;
+    const px = Math.cos(a) * radius;
+    const py = Math.sin(a) * radius;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+    const a2 = a + Math.PI / 5;
+    ctx.lineTo(Math.cos(a2) * (radius * 0.45), Math.sin(a2) * (radius * 0.45));
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Draws Mega-Bot 3000 — a fun, kid-friendly cartoon purple-and-silver robot boss
+ * race car with chunky treads/wheels, glowing neon-red/orange visor eyes,
+ * spinning antenna, and purple jet exhaust. Facing +X in local coordinates.
+ */
+export function drawBossCar(
+  ctx: CanvasRenderingContext2D,
+  timeMs: number,
+  scale = 1
+) {
+  ctx.save();
+  ctx.scale(scale, scale);
+
+  // Subtle purple jet energy aura behind Mega-Bot
+  const pulse = 1 + Math.sin(timeMs / 65) * 0.12;
+  ctx.save();
+  ctx.globalAlpha = 0.4;
+  const aura = ctx.createRadialGradient(-20, 0, 4, -20, 0, 38 * pulse);
+  aura.addColorStop(0, '#f0abfc');
+  aura.addColorStop(0.5, '#a855f7');
+  aura.addColorStop(1, 'rgba(126, 34, 206, 0)');
+  ctx.fillStyle = aura;
+  ctx.beginPath();
+  ctx.arc(-20, 0, 38 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Ground drop shadow
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.34)';
+  ctx.beginPath();
+  ctx.ellipse(0, 6, 34, 20, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Dual purple jet exhaust thrusters & pulsing purple/magenta flames
+  ctx.fillStyle = '#94a3b8';
+  ctx.strokeStyle = '#1e1b4b';
+  ctx.lineWidth = 2;
+  roundRect(ctx, -38, -12, 13, 8, 2.5);
+  ctx.fill();
+  ctx.stroke();
+  roundRect(ctx, -38, 4, 13, 8, 2.5);
+  ctx.fill();
+  ctx.stroke();
+
+  const flameLen = 15 + Math.sin(timeMs / 35) * 6;
+  const innerFlameLen = flameLen * 0.58;
+  for (const fy of [-8, 8]) {
+    // Outer purple jet flame
+    ctx.fillStyle = '#a855f7';
+    ctx.beginPath();
+    ctx.moveTo(-38, fy - 4.5);
+    ctx.lineTo(-38 - flameLen, fy);
+    ctx.lineTo(-38, fy + 4.5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Bright neon pink/lavender inner core
+    ctx.fillStyle = '#f5d0fe';
+    ctx.beginPath();
+    ctx.moveTo(-38, fy - 2.3);
+    ctx.lineTo(-38 - innerFlameLen, fy);
+    ctx.lineTo(-38, fy + 2.3);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Chunky robot treads / oversized wheels with animated tread ribs
+  const treadW = 18;
+  const treadH = 9.5;
+  const treadY = 16;
+  const treadOffset = (timeMs / 35) % 5;
+  const treadPositions = [
+    [-16, -treadY - treadH / 2],
+    [13, -treadY - treadH / 2],
+    [-16, treadY - treadH / 2],
+    [13, treadY - treadH / 2],
+  ];
+  for (const [tx, ty] of treadPositions) {
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1.6;
+    roundRect(ctx, tx - treadW / 2, ty, treadW, treadH, 3.5);
+    ctx.fill();
+    ctx.stroke();
+
+    // Animated metallic tread ribs
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1.3;
+    for (let rx = tx - treadW / 2 + 2 + treadOffset; rx < tx + treadW / 2 - 1; rx += 5) {
+      ctx.beginPath();
+      ctx.moveTo(rx, ty + 1.5);
+      ctx.lineTo(rx, ty + treadH - 1.5);
+      ctx.stroke();
+    }
+  }
+
+  // Heavy armored purple-and-silver robot chassis
+  ctx.fillStyle = '#7e22ce';
+  ctx.strokeStyle = '#1e1b4b';
+  ctx.lineWidth = 2.6;
+  ctx.beginPath();
+  ctx.moveTo(-28, -15);
+  ctx.lineTo(18, -15);
+  ctx.lineTo(31, -9);
+  ctx.lineTo(34, 0);
+  ctx.lineTo(31, 9);
+  ctx.lineTo(18, 15);
+  ctx.lineTo(-28, 15);
+  ctx.lineTo(-31, 9);
+  ctx.lineTo(-31, -9);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Metallic silver armor side plates & hood stripe
+  ctx.fillStyle = '#cbd5e1';
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 1.4;
+  roundRect(ctx, -20, -11, 44, 22, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  // Bold purple center stripe on hood
+  ctx.fillStyle = '#9333ea';
+  roundRect(ctx, -18, -5.5, 42, 11, 3.5);
+  ctx.fill();
+
+  // Silver front robot bumper teeth / grille
+  ctx.fillStyle = '#e2e8f0';
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, 25, -10, 6.5, 20, 2.5);
+  ctx.fill();
+  ctx.stroke();
+
+  // Glowing neon orange headlights on bumper corners
+  ctx.fillStyle = '#fb923c';
+  ctx.beginPath();
+  ctx.arc(28.5, -6.5, 2.2, 0, Math.PI * 2);
+  ctx.arc(28.5, 6.5, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Chunky rear spoiler wing with neon magenta tips
+  ctx.fillStyle = '#cbd5e1';
+  ctx.strokeStyle = '#1e1b4b';
+  ctx.lineWidth = 2;
+  roundRect(ctx, -31, -17, 7.5, 34, 3);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#e879f9';
+  roundRect(ctx, -31, -17, 7.5, 5, 2);
+  ctx.fill();
+  roundRect(ctx, -31, 12, 7.5, 5, 2);
+  ctx.fill();
+
+  // ==================== MEGA-BOT ROBOT HEAD ====================
+  ctx.save();
+  ctx.translate(-1, 0);
+
+  // Side metallic ear bolts
+  ctx.fillStyle = '#94a3b8';
+  ctx.strokeStyle = '#1e1b4b';
+  ctx.lineWidth = 1.6;
+  roundRect(ctx, -3, -15, 6, 4.5, 1.5);
+  ctx.fill();
+  ctx.stroke();
+  roundRect(ctx, -3, 10.5, 6, 4.5, 1.5);
+  ctx.fill();
+  ctx.stroke();
+
+  // Rounded-square silver robot head
+  ctx.fillStyle = '#e2e8f0';
+  ctx.strokeStyle = '#1e1b4b';
+  ctx.lineWidth = 2;
+  roundRect(ctx, -11, -11.5, 23, 23, 6.5);
+  ctx.fill();
+  ctx.stroke();
+
+  // Purple robot crown helmet plate
+  ctx.fillStyle = '#9333ea';
+  roundRect(ctx, -10, -8.5, 11, 17, 4);
+  ctx.fill();
+
+  // Dark visor housing facing +X
+  ctx.fillStyle = '#0f172a';
+  roundRect(ctx, 2, -9, 9.5, 18, 3.5);
+  ctx.fill();
+
+  // Glowing neon-red / orange visor eyes with subtle pulsing scan
+  const eyeGlow = 0.8 + Math.sin(timeMs / 110) * 0.2;
+  ctx.save();
+  ctx.shadowColor = '#ff3b30';
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = `rgba(255, 69, 0, ${eyeGlow})`;
+  roundRect(ctx, 4.2, -7.2, 5.2, 6, 2);
+  ctx.fill();
+  roundRect(ctx, 4.2, 1.2, 5.2, 6, 2);
+  ctx.fill();
+
+  // Hot orange-yellow core inside each visor eye
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#fde047';
+  roundRect(ctx, 5.6, -5.6, 2.4, 2.8, 1);
+  ctx.fill();
+  roundRect(ctx, 5.6, 2.8, 2.4, 2.8, 1);
+  ctx.fill();
+  ctx.restore();
+
+  // Spinning radar antenna on top of Mega-Bot's head
+  ctx.save();
+  ctx.translate(-4.5, 0);
+  ctx.rotate(timeMs / 150);
+
+  // Antenna crossbar
+  ctx.strokeStyle = '#1e1b4b';
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(-7.5, 0);
+  ctx.lineTo(7.5, 0);
+  ctx.stroke();
+
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(-7.5, 0);
+  ctx.lineTo(7.5, 0);
+  ctx.stroke();
+
+  // Glowing neon orb tips on spinning antenna
+  ctx.fillStyle = '#f43f5e';
+  ctx.beginPath();
+  ctx.arc(7.5, 0, 2.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#38bdf8';
+  ctx.beginPath();
+  ctx.arc(-7.5, 0, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Center antenna hub
+  ctx.fillStyle = '#c084fc';
+  ctx.strokeStyle = '#1e1b4b';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.restore(); // end robot head
+  ctx.restore(); // end drawBossCar
 }
 
 function drawDoggyHead(

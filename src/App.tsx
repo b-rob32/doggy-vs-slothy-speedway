@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   EquippedLoadout,
+  GameMode,
   PeerMessage,
   PlayerMathConfig,
   RaceConfig,
@@ -13,6 +14,7 @@ import {
 import { DEFAULT_LOADOUT, getShopItem } from './data/shop';
 import { arcadeAudio } from './engine/audio';
 import {
+  claimQuestReward,
   loadSaveData,
   persistSaveData,
   recordRaceInSave,
@@ -32,6 +34,7 @@ const DEFAULT_MATH: PlayerMathConfig = {
   difficulty: 'medium',
   timesTableFocus: null,
   inputMode: 'multiple-choice',
+  smartPractice: true,
 };
 
 const DEFAULT_RACE_CONFIG: RaceConfig = {
@@ -40,6 +43,8 @@ const DEFAULT_RACE_CONFIG: RaceConfig = {
   sprintSeconds: 60,
   sharedMath: true,
   fairRaceNoPerks: false,
+  powerUpsEnabled: true,
+  trackId: 'track-sunny',
   hostMath: { ...DEFAULT_MATH },
   guestMath: { ...DEFAULT_MATH },
   cpuDifficulty: 'medium',
@@ -54,7 +59,7 @@ export const App: React.FC = () => {
 
   const [screen, setScreen] = useState<ScreenName>('home');
   const [activeTeam, setActiveTeam] = useState<TeamId>('doggy');
-  const [mode, setMode] = useState<'solo' | 'multiplayer'>('solo');
+  const [mode, setMode] = useState<GameMode>('solo');
   const [raceConfig, setRaceConfig] = useState<RaceConfig>(DEFAULT_RACE_CONFIG);
   const [raceKey, setRaceKey] = useState(0);
 
@@ -67,6 +72,7 @@ export const App: React.FC = () => {
   const [peerError, setPeerError] = useState<string | null>(null);
   const [opponentLoadout, setOpponentLoadout] =
     useState<EquippedLoadout>(DEFAULT_LOADOUT);
+  const [remoteOpponentName, setRemoteOpponentName] = useState('');
   const [remoteOpponentState, setRemoteOpponentState] =
     useState<RacerLiveState | null>(null);
 
@@ -76,17 +82,16 @@ export const App: React.FC = () => {
   const peerRequestedRematchRef = useRef(false);
   const iRequestedRematchRef = useRef(false);
 
-  // Refs for peer callbacks
   const activeTeamRef = useRef(activeTeam);
   const raceConfigRef = useRef(raceConfig);
   const saveRef = useRef(save);
-  const mpRoleRef = useRef(mpRole);
+  const modeRef = useRef(mode);
   const oppLoadoutRef = useRef(opponentLoadout);
 
   activeTeamRef.current = activeTeam;
   raceConfigRef.current = raceConfig;
   saveRef.current = save;
-  mpRoleRef.current = mpRole;
+  modeRef.current = mode;
   oppLoadoutRef.current = opponentLoadout;
 
   useEffect(() => {
@@ -102,6 +107,7 @@ export const App: React.FC = () => {
     setPeerConnected(false);
     setPeerStatus('');
     setPeerError(null);
+    setRemoteOpponentName('');
     setRemoteOpponentState(null);
     setRematchStatus(null);
     peerRequestedRematchRef.current = false;
@@ -114,7 +120,8 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const launchRace = useCallback((cfg: RaceConfig) => {
+  const launchRace = useCallback((cfg: RaceConfig, nextMode?: GameMode) => {
+    if (nextMode) setMode(nextMode);
     const oppTeam: TeamId = activeTeamRef.current === 'doggy' ? 'slothy' : 'doggy';
     setRaceConfig(cfg);
     setRemoteOpponentState({
@@ -126,6 +133,7 @@ export const App: React.FC = () => {
       bestStreak: 0,
       turboUntil: 0,
       spinoutUntil: 0,
+      shieldActive: false,
       finished: false,
       finishTimeMs: null,
       loadout: oppLoadoutRef.current,
@@ -140,31 +148,36 @@ export const App: React.FC = () => {
   const handlePeerMessage = useCallback(
     (msg: PeerMessage) => {
       if (msg.type === 'hello') {
-        // Host received Guest hello -> assign opposite team to Guest and send lobby-state
         const hostTeam = activeTeamRef.current;
         const guestTeam: TeamId = hostTeam === 'doggy' ? 'slothy' : 'doggy';
         setOpponentLoadout(msg.loadout);
+        setRemoteOpponentName(msg.racerName || '');
         peerRef.current?.send({
           type: 'lobby-state',
+          mode: modeRef.current,
           config: raceConfigRef.current,
           hostTeam,
+          hostName: saveRef.current.profiles[hostTeam].racerName,
           hostLoadout: saveRef.current.profiles[hostTeam].equipped,
           guestTeam,
+          guestName: msg.racerName || '',
           guestLoadout: msg.loadout,
         });
       } else if (msg.type === 'lobby-state') {
-        // Guest receives authoritative lobby config & assigned team
+        setMode(msg.mode);
         setActiveTeam(msg.guestTeam);
         setOpponentLoadout(msg.hostLoadout);
+        setRemoteOpponentName(msg.hostName || '');
         setRaceConfig(msg.config);
       } else if (msg.type === 'guest-update') {
         setOpponentLoadout(msg.loadout);
+        setRemoteOpponentName(msg.guestName || '');
         setRaceConfig((prev) => ({
           ...prev,
           guestMath: msg.guestMath,
         }));
       } else if (msg.type === 'start-race') {
-        launchRace(msg.config);
+        launchRace(msg.config, msg.mode);
       } else if (msg.type === 'progress') {
         const oppTeam: TeamId =
           activeTeamRef.current === 'doggy' ? 'slothy' : 'doggy';
@@ -177,6 +190,7 @@ export const App: React.FC = () => {
           bestStreak: msg.bestStreak,
           turboUntil: msg.turboActive ? Date.now() + 2200 : prev?.turboUntil ?? 0,
           spinoutUntil: msg.spinoutActive ? Date.now() + 800 : 0,
+          shieldActive: msg.shieldActive ?? false,
           finished: msg.finished,
           finishTimeMs: msg.finishTimeMs,
           loadout: oppLoadoutRef.current,
@@ -203,11 +217,12 @@ export const App: React.FC = () => {
       setPeerError(null);
       setPeerStatus('Connected! Both devices are ready to race!');
       if (!p.isHost) {
-        const myLoadout = saveRef.current.profiles[activeTeamRef.current].equipped;
+        const prof = saveRef.current.profiles[activeTeamRef.current];
         p.send({
           type: 'hello',
           team: activeTeamRef.current,
-          loadout: myLoadout,
+          racerName: prof.racerName,
+          loadout: prof.equipped,
         });
       }
     };
@@ -252,22 +267,26 @@ export const App: React.FC = () => {
 
   const handleChangeConfig = (next: RaceConfig) => {
     setRaceConfig(next);
-    if (mode === 'multiplayer' && peerConnected) {
+    if (peerConnected) {
       if (mpRole === 'host') {
         const hostTeam = activeTeam;
         const guestTeam: TeamId = hostTeam === 'doggy' ? 'slothy' : 'doggy';
         peerRef.current?.send({
           type: 'lobby-state',
+          mode,
           config: next,
           hostTeam,
+          hostName: save.profiles[hostTeam].racerName,
           hostLoadout: save.profiles[hostTeam].equipped,
           guestTeam,
+          guestName: remoteOpponentName,
           guestLoadout: opponentLoadout,
         });
       } else if (mpRole === 'guest') {
         peerRef.current?.send({
           type: 'guest-update',
           guestMath: next.guestMath,
+          guestName: save.profiles[activeTeam].racerName,
           loadout: save.profiles[activeTeam].equipped,
         });
       }
@@ -275,9 +294,10 @@ export const App: React.FC = () => {
   };
 
   const handleStartRace = () => {
-    if (mode === 'multiplayer' && mpRole === 'host') {
+    if (mpRole === 'host' && peerConnected) {
       peerRef.current?.send({
         type: 'start-race',
+        mode,
         startAt: Date.now(),
         config: raceConfig,
       });
@@ -285,38 +305,40 @@ export const App: React.FC = () => {
     launchRace(raceConfig);
   };
 
-  const handleSendProgress = useCallback(
-    (st: RacerLiveState) => {
-      if (mode !== 'multiplayer' || !peerRef.current?.isConnected()) return;
-      peerRef.current.send({
-        type: 'progress',
-        progress: st.progress,
-        correctCount: st.correctCount,
-        wrongCount: st.wrongCount,
-        streak: st.streak,
-        bestStreak: st.bestStreak,
-        turboActive: st.turboUntil > Date.now(),
-        spinoutActive: st.spinoutUntil > Date.now(),
-        finished: st.finished,
-        finishTimeMs: st.finishTimeMs,
-      });
-    },
-    [mode]
-  );
+  const handleSendProgress = useCallback((st: RacerLiveState) => {
+    if (!peerRef.current?.isConnected()) return;
+    peerRef.current.send({
+      type: 'progress',
+      progress: st.progress,
+      correctCount: st.correctCount,
+      wrongCount: st.wrongCount,
+      streak: st.streak,
+      bestStreak: st.bestStreak,
+      turboActive: st.turboUntil > Date.now(),
+      spinoutActive: st.spinoutUntil > Date.now(),
+      shieldActive: st.shieldActive ?? false,
+      finished: st.finished,
+      finishTimeMs: st.finishTimeMs,
+    });
+  }, []);
 
   const handleRaceFinish = useCallback((summary: RaceSummary) => {
-    setLastSummary(summary);
-    setSave((prev) => recordRaceInSave(prev, summary));
+    const prevBadges = new Set(saveRef.current.profiles[summary.myTeam].badges);
+    const updated = recordRaceInSave(saveRef.current, summary);
+    const newlyUnlocked = updated.profiles[summary.myTeam].badges.filter(
+      (b) => !prevBadges.has(b)
+    );
+    setSave(updated);
+    setLastSummary({
+      ...summary,
+      newlyUnlockedBadges: newlyUnlocked,
+    });
     setScreen('podium');
   }, []);
 
   const handleRematch = () => {
-    if (mode === 'solo') {
-      launchRace(raceConfig);
-      return;
-    }
     if (!peerRef.current?.isConnected()) {
-      setRematchStatus('Connection closed — tap Home to start a new room!');
+      launchRace(raceConfig);
       return;
     }
     iRequestedRematchRef.current = true;
@@ -325,7 +347,9 @@ export const App: React.FC = () => {
       launchRace(raceConfig);
     } else {
       peerRef.current.send({ type: 'rematch-request' });
-      setRematchStatus('Rematch requested! Waiting for your sister to tap Race Again...');
+      setRematchStatus(
+        'Rematch requested! Waiting for your sister to tap Race Again...'
+      );
     }
   };
 
@@ -342,6 +366,7 @@ export const App: React.FC = () => {
       if (item.category === 'gear') nextEquipped.gearId = itemId;
       if (item.category === 'accessory') nextEquipped.accessoryId = itemId;
       if (item.category === 'trail') nextEquipped.trailId = itemId;
+      if (item.category === 'track') nextEquipped.trackId = itemId;
       if (item.category === 'sound') nextEquipped.soundId = itemId;
       if (item.category === 'radio') nextEquipped.radioId = itemId;
       if (item.category === 'celebration') nextEquipped.celebrationId = itemId;
@@ -370,6 +395,7 @@ export const App: React.FC = () => {
       if (category === 'gear') nextEquipped.gearId = itemId;
       if (category === 'accessory') nextEquipped.accessoryId = itemId;
       if (category === 'trail') nextEquipped.trailId = itemId;
+      if (category === 'track') nextEquipped.trackId = itemId;
       if (category === 'sound') nextEquipped.soundId = itemId;
       if (category === 'radio') nextEquipped.radioId = itemId;
       if (category === 'celebration') nextEquipped.celebrationId = itemId;
@@ -386,20 +412,50 @@ export const App: React.FC = () => {
     });
   };
 
+  const handleUpdateRacerName = (team: TeamId, name: string) => {
+    setSave((prev) => ({
+      ...prev,
+      profiles: {
+        ...prev.profiles,
+        [team]: {
+          ...prev.profiles[team],
+          racerName: name.slice(0, 16),
+        },
+      },
+    }));
+  };
+
+  const handleClaimQuest = (team: TeamId, questId: string) => {
+    arcadeAudio.playCoin();
+    setSave((prev) => claimQuestReward(prev, team, questId));
+  };
+
   const handleToggleMute = () => {
     setSave((prev) => ({ ...prev, soundMuted: !prev.soundMuted }));
   };
 
+  const openLobby = (nextMode: GameMode) => {
+    cleanupPeer();
+    setMode(nextMode);
+    setRaceConfig((prev) => ({
+      ...prev,
+      trackId: save.profiles[activeTeam].equipped.trackId || 'track-sunny',
+    }));
+    setScreen('lobby');
+  };
+
   const myMathConfig: PlayerMathConfig =
-    mode === 'multiplayer' && !raceConfig.sharedMath && mpRole === 'guest'
+    !raceConfig.sharedMath && mpRole === 'guest'
       ? raceConfig.guestMath
       : raceConfig.hostMath;
 
   const oppTeam: TeamId = activeTeam === 'doggy' ? 'slothy' : 'doggy';
-  const effectiveOpponentLoadout =
-    mode === 'multiplayer'
-      ? opponentLoadout
-      : save.profiles[oppTeam].equipped;
+  const effectiveOpponentLoadout = peerConnected
+    ? opponentLoadout
+    : save.profiles[oppTeam].equipped;
+  const effectiveOpponentName = peerConnected
+    ? remoteOpponentName
+    : save.profiles[oppTeam].racerName;
 
   return (
     <div className="app-shell">
@@ -408,16 +464,11 @@ export const App: React.FC = () => {
           save={save}
           activeTeam={activeTeam}
           onSelectTeam={setActiveTeam}
-          onStartMultiplayer={() => {
-            cleanupPeer();
-            setMode('multiplayer');
-            setScreen('lobby');
-          }}
-          onStartSolo={() => {
-            cleanupPeer();
-            setMode('solo');
-            setScreen('lobby');
-          }}
+          onUpdateRacerName={handleUpdateRacerName}
+          onClaimQuest={handleClaimQuest}
+          onStartMultiplayer={() => openLobby('multiplayer')}
+          onStartSolo={() => openLobby('solo')}
+          onStartCoopBoss={() => openLobby('coop-boss')}
           onOpenGarage={() => setScreen('garage')}
           onOpenStats={() => setScreen('stats')}
           onToggleMute={handleToggleMute}
@@ -428,6 +479,9 @@ export const App: React.FC = () => {
         <LobbyScreen
           mode={mode}
           myTeam={activeTeam}
+          myName={save.profiles[activeTeam].racerName}
+          opponentName={effectiveOpponentName}
+          unlockedIds={save.profiles[activeTeam].unlockedIds}
           config={raceConfig}
           onChangeConfig={handleChangeConfig}
           mpRole={mpRole}
@@ -450,12 +504,16 @@ export const App: React.FC = () => {
           key={raceKey}
           mode={mode}
           myTeam={activeTeam}
+          myName={save.profiles[activeTeam].racerName}
+          opponentName={effectiveOpponentName}
           myLoadout={save.profiles[activeTeam].equipped}
           unlockedIds={save.profiles[activeTeam].unlockedIds}
+          missedFactCounts={save.profiles[activeTeam].missedFactCounts}
           opponentLoadout={effectiveOpponentLoadout}
           config={raceConfig}
           myMathConfig={myMathConfig}
           remoteOpponentState={remoteOpponentState}
+          peerConnected={peerConnected}
           soundMuted={save.soundMuted}
           onToggleMute={handleToggleMute}
           onChangeRadio={(radioId) => handleEquipItem('radio', radioId)}
@@ -472,6 +530,8 @@ export const App: React.FC = () => {
       {screen === 'podium' && lastSummary && (
         <PodiumScreen
           summary={lastSummary}
+          myName={save.profiles[activeTeam].racerName}
+          opponentName={effectiveOpponentName}
           headToHead={save.headToHead}
           totalCoins={save.profiles[activeTeam].coins}
           rematchStatus={rematchStatus}

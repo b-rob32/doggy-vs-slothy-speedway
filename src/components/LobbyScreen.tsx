@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft,
+  Brain,
   Check,
   Copy,
   Flag,
+  Map,
   Play,
   ShieldCheck,
   Sparkles,
   Wifi,
+  Zap,
 } from 'lucide-react';
 import {
   CpuDifficulty,
   Difficulty,
+  GameMode,
   InputMode,
   LapPreset,
   Operation,
@@ -19,14 +23,16 @@ import {
   RaceConfig,
   TeamId,
 } from '../types';
-import { getTeamMeta } from '../data/shop';
+import { getTeamMeta, SHOP_ITEMS } from '../data/shop';
 
 interface LobbyScreenProps {
-  mode: 'solo' | 'multiplayer';
+  mode: GameMode;
   myTeam: TeamId;
+  myName: string;
+  opponentName: string;
+  unlockedIds: string[];
   config: RaceConfig;
   onChangeConfig: (next: RaceConfig) => void;
-  // Multiplayer props
   mpRole: 'none' | 'host' | 'guest';
   roomCode: string;
   peerConnected: boolean;
@@ -154,6 +160,27 @@ const MathConfigEditor: React.FC<{
           ))}
         </div>
       </div>
+
+      <div className="toggle-list">
+        <label className="toggle-row">
+          <div>
+            <strong>
+              <Brain size={15} /> Smart Practice Mode
+            </strong>
+            <small>
+              Gently mixes in tricky facts you missed before until mastered!
+            </small>
+          </div>
+          <input
+            type="checkbox"
+            disabled={disabled}
+            checked={value.smartPractice}
+            onChange={(e) =>
+              onChange({ ...value, smartPractice: e.target.checked })
+            }
+          />
+        </label>
+      </div>
     </div>
   );
 };
@@ -161,6 +188,9 @@ const MathConfigEditor: React.FC<{
 export const LobbyScreen: React.FC<LobbyScreenProps> = ({
   mode,
   myTeam,
+  myName,
+  opponentName,
+  unlockedIds,
   config,
   onChangeConfig,
   mpRole,
@@ -176,11 +206,15 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
   const [joinInput, setJoinInput] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const myMeta = getTeamMeta(myTeam);
+  const myMeta = getTeamMeta(myTeam, myName);
   const oppTeam: TeamId = myTeam === 'doggy' ? 'slothy' : 'doggy';
-  const oppMeta = getTeamMeta(oppTeam);
+  const oppMeta = getTeamMeta(oppTeam, opponentName);
 
-  const isGuest = mode === 'multiplayer' && mpRole === 'guest';
+  const isGuest = mpRole === 'guest';
+  const showPeerPanel = mode === 'multiplayer' || mode === 'coop-boss';
+  const unlockedTracks = SHOP_ITEMS.filter(
+    (i) => i.category === 'track' && unlockedIds.includes(i.id)
+  );
 
   const handleCopyCode = () => {
     if (!roomCode) return;
@@ -189,6 +223,11 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
     window.setTimeout(() => setCopied(false), 1800);
   };
 
+  const canStart =
+    mode === 'solo' ||
+    (mode === 'coop-boss' && mpRole !== 'guest') ||
+    (mode === 'multiplayer' && mpRole === 'host' && peerConnected);
+
   return (
     <div className="screen lobby-screen">
       <div className="top-bar">
@@ -196,23 +235,38 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           <ArrowLeft size={20} /> Back
         </button>
         <h2 className="screen-title">
-          {mode === 'multiplayer' ? '2-Player Race Lobby' : 'Solo vs. CPU Setup'}
+          {mode === 'multiplayer'
+            ? '2-Player Race Lobby'
+            : mode === 'coop-boss'
+            ? '🤖 Co-Op vs. Mega-Bot!'
+            : 'Solo vs. CPU Setup'}
         </h2>
         <div className="team-badge-mini">
           {myMeta.emoji} {myMeta.shortName}
         </div>
       </div>
 
-      {/* 2-Player Room Connection Panel */}
-      {mode === 'multiplayer' && (
+      {mode === 'coop-boss' && (
+        <div className="boss-banner">
+          <strong>🤖 TEAM UP TO BEAT MEGA-BOT 3000!</strong>
+          <span>
+            Doggy &amp; Slothy race TOGETHER! If either sister finishes before
+            Mega-Bot, you BOTH win! Play solo with an AI teammate, or link 2
+            devices below!
+          </span>
+        </div>
+      )}
+
+      {/* Room Connection Panel for 2-Player or Optional 2-Device Co-Op */}
+      {showPeerPanel && (
         <div className="mp-card">
           {mpRole === 'none' ? (
             <div className="mp-choice-grid">
               <div className="mp-choice-box">
                 <h3>1. Start a Room (Host)</h3>
                 <p>
-                  Create a 4-letter room code on this device so your sister can join
-                  from hers!
+                  Create a 4-letter room code on this device so your sister can
+                  join from hers!
                 </p>
                 <button
                   className="arcade-btn arcade-btn--primary"
@@ -232,7 +286,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                     placeholder="ABCD"
                     value={joinInput}
                     onChange={(e) =>
-                      setJoinInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+                      setJoinInput(
+                        e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+                      )
                     }
                     className="code-input"
                   />
@@ -279,11 +335,14 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                   <img src={myMeta.portrait} alt={myMeta.name} />
                   <span>{myMeta.name} (You)</span>
                 </div>
-                <span className="vs-badge">VS</span>
+                <span className="vs-badge">
+                  {mode === 'coop-boss' ? '+' : 'VS'}
+                </span>
                 <div className="matchup-racer">
                   <img src={oppMeta.portrait} alt={oppMeta.name} />
                   <span>
-                    {oppMeta.name} {peerConnected ? '(Ready!)' : '(Waiting...)'}
+                    {oppMeta.name}{' '}
+                    {peerConnected ? '(Ready!)' : '(Waiting...)'}
                   </span>
                 </div>
               </div>
@@ -294,13 +353,12 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
         </div>
       )}
 
-      {/* Race Settings (shown in Solo or once Host/Guest is active) */}
-      {(mode === 'solo' || mpRole !== 'none') && (
+      {/* Race Settings */}
+      {(mode !== 'multiplayer' || mpRole !== 'none') && (
         <div className="lobby-config-grid">
-          {/* Format & Track Options */}
           <div className="config-card">
             <h3 className="config-card-title">
-              <Flag size={18} /> Race Format
+              <Flag size={18} /> Race Format &amp; Track
             </h3>
 
             <div className="field-group">
@@ -353,13 +411,38 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
               </div>
             )}
 
-            {mode === 'solo' && (
+            <div className="field-group">
+              <label>
+                <Map size={13} /> Speedway Track
+              </label>
+              <div className="pill-row">
+                {unlockedTracks.map((tr) => (
+                  <button
+                    key={tr.id}
+                    type="button"
+                    disabled={isGuest}
+                    className={`pill-btn ${
+                      config.trackId === tr.id ? 'active' : ''
+                    }`}
+                    onClick={() => onChangeConfig({ ...config, trackId: tr.id })}
+                  >
+                    {tr.name.replace(' Speedway', '').replace(' Circuit', '')}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {(mode === 'solo' || mode === 'coop-boss') && (
               <div className="field-group">
-                <label>CPU Speed ({oppMeta.shortName})</label>
+                <label>
+                  {mode === 'coop-boss'
+                    ? 'Mega-Bot 3000 Speed'
+                    : `CPU Speed (${oppMeta.shortName})`}
+                </label>
                 <div className="pill-row pill-row--3">
                   {(
                     [
-                      { id: 'easy', label: 'Chill', hint: 'Great for warmups' },
+                      { id: 'easy', label: 'Chill', hint: 'Great warmup' },
                       { id: 'medium', label: 'Speedy', hint: 'Fun challenge' },
                       { id: 'fast', label: 'Turbo Pro', hint: 'Super fast!' },
                     ] as { id: CpuDifficulty; label: string; hint: string }[]
@@ -367,6 +450,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                     <button
                       key={c.id}
                       type="button"
+                      disabled={isGuest}
                       className={`pill-btn pill-btn--stack ${
                         config.cpuDifficulty === c.id ? 'active' : ''
                       }`}
@@ -382,54 +466,77 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
               </div>
             )}
 
-            {/* Toggles */}
-            {mode === 'multiplayer' && (
-              <div className="toggle-list">
-                <label className="toggle-row">
-                  <div>
-                    <strong>
-                      <Sparkles size={15} /> Custom Math per Player
-                    </strong>
-                    <small>
-                      Let each sister pick her own math mode &amp; difficulty!
-                    </small>
-                  </div>
-                  <input
-                    type="checkbox"
-                    disabled={isGuest}
-                    checked={!config.sharedMath}
-                    onChange={(e) =>
-                      onChangeConfig({
-                        ...config,
-                        sharedMath: !e.target.checked,
-                      })
-                    }
-                  />
-                </label>
+            <div className="toggle-list">
+              <label className="toggle-row">
+                <div>
+                  <strong>
+                    <Zap size={15} /> Track Power-Ups
+                  </strong>
+                  <small>
+                    4-streaks drop Shields, Turbo Mushrooms &amp; Coin Bursts!
+                  </small>
+                </div>
+                <input
+                  type="checkbox"
+                  disabled={isGuest}
+                  checked={config.powerUpsEnabled}
+                  onChange={(e) =>
+                    onChangeConfig({
+                      ...config,
+                      powerUpsEnabled: e.target.checked,
+                    })
+                  }
+                />
+              </label>
 
-                <label className="toggle-row">
-                  <div>
-                    <strong>
-                      <ShieldCheck size={15} /> Fair Race (No Garage Perks)
-                    </strong>
-                    <small>
-                      Keep cool cars &amp; trails, but make speed 100% math-only.
-                    </small>
-                  </div>
-                  <input
-                    type="checkbox"
-                    disabled={isGuest}
-                    checked={config.fairRaceNoPerks}
-                    onChange={(e) =>
-                      onChangeConfig({
-                        ...config,
-                        fairRaceNoPerks: e.target.checked,
-                      })
-                    }
-                  />
-                </label>
-              </div>
-            )}
+              {(mode === 'multiplayer' || (mode === 'coop-boss' && peerConnected)) && (
+                <>
+                  <label className="toggle-row">
+                    <div>
+                      <strong>
+                        <Sparkles size={15} /> Custom Math per Player
+                      </strong>
+                      <small>
+                        Let each sister pick her own math mode &amp; difficulty!
+                      </small>
+                    </div>
+                    <input
+                      type="checkbox"
+                      disabled={isGuest}
+                      checked={!config.sharedMath}
+                      onChange={(e) =>
+                        onChangeConfig({
+                          ...config,
+                          sharedMath: !e.target.checked,
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label className="toggle-row">
+                    <div>
+                      <strong>
+                        <ShieldCheck size={15} /> Fair Race (No Garage Perks)
+                      </strong>
+                      <small>
+                        Keep cool cars &amp; trails, but make speed 100% math-only.
+                      </small>
+                    </div>
+                    <input
+                      type="checkbox"
+                      disabled={isGuest}
+                      checked={config.fairRaceNoPerks}
+                      onChange={(e) =>
+                        onChangeConfig({
+                          ...config,
+                          fairRaceNoPerks: e.target.checked,
+                        })
+                      }
+                    />
+                  </label>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Math Settings */}
@@ -472,15 +579,19 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
       )}
 
       {/* Start Button */}
-      {(mode === 'solo' || mpRole === 'host') && (
+      {!isGuest && (mode !== 'multiplayer' || mpRole === 'host') && (
         <div className="lobby-footer">
           <button
             className="arcade-btn arcade-btn--start"
-            disabled={mode === 'multiplayer' && !peerConnected}
+            disabled={!canStart}
             onClick={onStartRace}
           >
             <Play size={24} />
-            {mode === 'multiplayer'
+            {mode === 'coop-boss'
+              ? peerConnected
+                ? 'START 2-PLAYER BOSS BATTLE! 🤖'
+                : 'START CO-OP BOSS BATTLE (WITH AI SISTER)! 🤖'
+              : mode === 'multiplayer'
               ? peerConnected
                 ? 'START 2-PLAYER RACE!'
                 : 'Waiting for Sister to Join...'

@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Delete, Flame, Radio, Volume2, VolumeX, X } from 'lucide-react';
+import { Delete, Flame, Radio, Shield, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
 import {
   EquippedLoadout,
+  GameMode,
   MathProblem,
   MissedQuestion,
   OperationStat,
   PlayerMathConfig,
+  PowerUpType,
   RaceConfig,
   RaceSummary,
   RacerLiveState,
@@ -13,20 +15,24 @@ import {
   TeamId,
 } from '../types';
 import { getEffectivePerks, getShopItem, getTeamMeta, SHOP_ITEMS } from '../data/shop';
-import { generateProblem } from '../engine/mathGenerator';
+import { generateProblem, makeFactKey } from '../engine/mathGenerator';
 import { arcadeAudio } from '../engine/audio';
 import { calculateCoins } from '../engine/storage';
 import { SpeedwayCanvas } from './SpeedwayCanvas';
 
 interface RaceScreenProps {
-  mode: 'solo' | 'multiplayer';
+  mode: GameMode;
   myTeam: TeamId;
+  myName: string;
+  opponentName: string;
   myLoadout: EquippedLoadout;
   unlockedIds: string[];
+  missedFactCounts: Record<string, number>;
   opponentLoadout: EquippedLoadout;
   config: RaceConfig;
   myMathConfig: PlayerMathConfig;
   remoteOpponentState: RacerLiveState | null;
+  peerConnected: boolean;
   soundMuted: boolean;
   onToggleMute: () => void;
   onChangeRadio: (radioId: string) => void;
@@ -41,17 +47,42 @@ const LAP_COUNTS = {
   long: 5,
 };
 
-const BASE_LAP_STEP = 1 / 8; // 8 correct answers per lap
+const BASE_LAP_STEP = 1 / 8;
+
+const POWERUP_META: Record<
+  PowerUpType,
+  { emoji: string; label: string; hint: string }
+> = {
+  shield: {
+    emoji: '🛡️',
+    label: 'Star Shield',
+    hint: 'Tap to activate! Blocks next spin-out!',
+  },
+  mushroom: {
+    emoji: '🍄',
+    label: 'Turbo Shroom',
+    hint: 'Tap for an instant mega speed boost!',
+  },
+  'coin-burst': {
+    emoji: '🧲',
+    label: 'Coin Burst',
+    hint: 'Tap for +15 instant Speed Coins!',
+  },
+};
 
 export const RaceScreen: React.FC<RaceScreenProps> = ({
   mode,
   myTeam,
+  myName,
+  opponentName,
   myLoadout,
   unlockedIds,
+  missedFactCounts,
   opponentLoadout,
   config,
   myMathConfig,
   remoteOpponentState,
+  peerConnected,
   soundMuted,
   onToggleMute,
   onChangeRadio,
@@ -60,6 +91,11 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
   onQuit,
 }) => {
   const oppTeam: TeamId = myTeam === 'doggy' ? 'slothy' : 'doggy';
+  const isBossMode = mode === 'coop-boss';
+  const useRemotePeer =
+    (mode === 'multiplayer' || (mode === 'coop-boss' && peerConnected)) &&
+    remoteOpponentState !== null;
+
   const totalLaps = config.format === 'laps' ? LAP_COUNTS[config.lapPreset] : null;
   const perks = useMemo(
     () => getEffectivePerks(myLoadout, config.fairRaceNoPerks),
@@ -87,6 +123,7 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     bestStreak: 0,
     turboUntil: 0,
     spinoutUntil: 0,
+    shieldActive: false,
     finished: false,
     finishTimeMs: null,
     loadout: myLoadout,
@@ -101,16 +138,24 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     bestStreak: 0,
     turboUntil: 0,
     spinoutUntil: 0,
+    shieldActive: false,
     finished: false,
     finishTimeMs: null,
     loadout: opponentLoadout,
   });
 
-  const opponentState: RacerLiveState =
-    mode === 'multiplayer' && remoteOpponentState ? remoteOpponentState : cpuState;
+  const [bossProgress, setBossProgress] = useState<number>(0);
+
+  // Power-Ups state
+  const [heldPowerUp, setHeldPowerUp] = useState<PowerUpType | null>(null);
+  const powerUpCoinsRef = useRef<number>(0);
+
+  const opponentState: RacerLiveState = useRemotePeer
+    ? remoteOpponentState!
+    : cpuState;
 
   const [problem, setProblem] = useState<MathProblem>(() =>
-    generateProblem(myMathConfig)
+    generateProblem(myMathConfig, undefined, missedFactCounts)
   );
   const [typedValue, setTypedValue] = useState('');
   const [feedback, setFeedback] = useState<
@@ -122,6 +167,7 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
   const [turboBannerTeam, setTurboBannerTeam] = useState<TeamId | null>(null);
 
   const missedRef = useRef<MissedQuestion[]>([]);
+  const masteredRef = useRef<Set<string>>(new Set());
   const perOpRef = useRef<Record<SingleOperation, OperationStat>>({
     addition: { correct: 0, total: 0 },
     subtraction: { correct: 0, total: 0 },
@@ -131,15 +177,17 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
   const finishedRef = useRef(false);
   const myStateRef = useRef(myState);
   const oppStateRef = useRef(opponentState);
+  const bossProgRef = useRef(bossProgress);
   const raceStartRef = useRef<number | null>(null);
   const lastLapRef = useRef(0);
   const bannerTimeoutRef = useRef<number | null>(null);
 
   myStateRef.current = myState;
   oppStateRef.current = opponentState;
+  bossProgRef.current = bossProgress;
   raceStartRef.current = raceStartedAt;
 
-  // Manage Car Radio playback while racing
+  // Car Radio playback
   useEffect(() => {
     if (raceStartedAt && !finishedRef.current && !soundMuted) {
       arcadeAudio.startRadio(myLoadout.radioId);
@@ -210,7 +258,11 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
   }, []);
 
   const finalizeRace = useCallback(
-    (finalMy: RacerLiveState, finalOpp: RacerLiveState) => {
+    (
+      finalMy: RacerLiveState,
+      finalOpp: RacerLiveState,
+      finalBossProg?: number
+    ) => {
       if (finishedRef.current) return;
       finishedRef.current = true;
       arcadeAudio.stopRadio();
@@ -221,7 +273,22 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
       );
 
       let result: 'win' | 'loss' | 'tie' = 'tie';
-      if (config.format === 'laps' && totalLaps) {
+      const bp = finalBossProg ?? bossProgRef.current;
+
+      if (isBossMode) {
+        const bestTeamProg = Math.max(finalMy.progress, finalOpp.progress);
+        if (config.format === 'laps' && totalLaps) {
+          if (finalMy.finished || finalOpp.finished) {
+            result = 'win';
+          } else if (bp >= totalLaps) {
+            result = 'loss';
+          } else {
+            result = bestTeamProg >= bp ? 'win' : 'loss';
+          }
+        } else {
+          result = bestTeamProg >= bp ? 'win' : 'loss';
+        }
+      } else if (config.format === 'laps' && totalLaps) {
         if (finalMy.finished && !finalOpp.finished) {
           result = 'win';
         } else if (!finalMy.finished && finalOpp.finished) {
@@ -251,7 +318,8 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
         finalMy.wrongCount,
         finalMy.bestStreak,
         myLoadout,
-        config.fairRaceNoPerks
+        config.fairRaceNoPerks,
+        powerUpCoinsRef.current + (isBossMode && result === 'win' ? 20 : 0)
       );
 
       arcadeAudio.playVictory(myLoadout.celebrationId);
@@ -265,16 +333,19 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
         result,
         myState: finalMy,
         opponentState: finalOpp,
+        bossProgress: isBossMode ? bp : undefined,
         durationMs,
         qpm,
         accuracy,
         missedQuestions: [...missedRef.current],
+        masteredFactKeys: Array.from(masteredRef.current),
         coins,
         perOperationCounts: { ...perOpRef.current },
       });
     },
     [
       config,
+      isBossMode,
       mode,
       myLoadout,
       myMathConfig,
@@ -285,18 +356,20 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     ]
   );
 
+  // Watch for remote sister finishing in multiplayer or 2-player co-op boss
   useEffect(() => {
     if (
-      mode === 'multiplayer' &&
+      useRemotePeer &&
       config.format === 'laps' &&
       totalLaps &&
       remoteOpponentState?.finished &&
       !finishedRef.current
     ) {
-      finalizeRace(myStateRef.current, remoteOpponentState);
+      finalizeRace(myStateRef.current, remoteOpponentState, bossProgRef.current);
     }
-  }, [config.format, finalizeRace, mode, remoteOpponentState, totalLaps]);
+  }, [config.format, finalizeRace, remoteOpponentState, totalLaps, useRemotePeer]);
 
+  // Timed Sprint countdown timer
   useEffect(() => {
     if (!raceStartedAt || config.format !== 'sprint') return;
     const interval = window.setInterval(() => {
@@ -305,21 +378,22 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
       setTimeLeftSec(remaining);
       if (remaining <= 0 && !finishedRef.current) {
         window.clearInterval(interval);
-        finalizeRace(myStateRef.current, oppStateRef.current);
+        finalizeRace(myStateRef.current, oppStateRef.current, bossProgRef.current);
       }
     }, 200);
     return () => window.clearInterval(interval);
   }, [config.format, config.sprintSeconds, finalizeRace, raceStartedAt]);
 
+  // AI Sister / Opponent loop (runs in Solo mode, OR in Solo Co-Op Boss mode)
   useEffect(() => {
-    if (mode !== 'solo' || !raceStartedAt) return;
+    if (useRemotePeer || !raceStartedAt) return;
 
     const baseMs =
       config.cpuDifficulty === 'easy'
         ? 4100
         : config.cpuDifficulty === 'medium'
-        ? 2700
-        : 1800;
+        ? 2800
+        : 1900;
 
     let timer = 0;
     const scheduleNext = () => {
@@ -358,7 +432,10 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
               : null,
           };
           if (finished) {
-            window.setTimeout(() => finalizeRace(myStateRef.current, nextState), 120);
+            window.setTimeout(
+              () => finalizeRace(myStateRef.current, nextState, bossProgRef.current),
+              120
+            );
           }
           return nextState;
         });
@@ -368,7 +445,88 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
 
     scheduleNext();
     return () => window.clearTimeout(timer);
-  }, [config.cpuDifficulty, finalizeRace, mode, raceStartedAt, totalLaps]);
+  }, [config.cpuDifficulty, finalizeRace, raceStartedAt, totalLaps, useRemotePeer]);
+
+  // Mega-Bot 3000 Boss movement loop in Co-Op Boss Mode!
+  useEffect(() => {
+    if (!isBossMode || !raceStartedAt) return;
+    // Smooth deterministic boss speed so both devices stay closely synced!
+    const lapsPerSec =
+      config.cpuDifficulty === 'easy'
+        ? 0.036
+        : config.cpuDifficulty === 'medium'
+        ? 0.052
+        : 0.072;
+
+    const interval = window.setInterval(() => {
+      if (finishedRef.current) return;
+      const elapsedSec = (Date.now() - raceStartedAt) / 1000;
+      const nextBoss = totalLaps
+        ? Math.min(totalLaps, elapsedSec * lapsPerSec)
+        : elapsedSec * lapsPerSec;
+      setBossProgress(nextBoss);
+      if (totalLaps && nextBoss >= totalLaps) {
+        window.clearInterval(interval);
+        finalizeRace(myStateRef.current, oppStateRef.current, nextBoss);
+      }
+    }, 150);
+
+    return () => window.clearInterval(interval);
+  }, [config.cpuDifficulty, finalizeRace, isBossMode, raceStartedAt, totalLaps]);
+
+  const useHeldPowerUp = useCallback(() => {
+    if (!heldPowerUp || !raceStartedAt || finishedRef.current) return;
+    const pu = heldPowerUp;
+    setHeldPowerUp(null);
+
+    if (pu === 'shield') {
+      arcadeAudio.playCoin();
+      const next: RacerLiveState = {
+        ...myStateRef.current,
+        shieldActive: true,
+      };
+      setMyState(next);
+      onSendProgress(next);
+      setFeedback({ kind: 'correct', text: '🛡️ STAR SHIELD ACTIVE!' });
+    } else if (pu === 'mushroom') {
+      arcadeAudio.playTurbo(myTeam);
+      showTurboBanner(myTeam);
+      const prev = myStateRef.current;
+      const boost = 0.32 * (1 + perks.turboBonus);
+      const rawNext = prev.progress + boost;
+      const nextProg = totalLaps ? Math.min(totalLaps, rawNext) : rawNext;
+      const finished = Boolean(totalLaps && nextProg >= totalLaps);
+      const next: RacerLiveState = {
+        ...prev,
+        progress: nextProg,
+        turboUntil: Date.now() + 2800,
+        finished,
+        finishTimeMs: finished ? Date.now() - raceStartedAt : null,
+      };
+      setMyState(next);
+      onSendProgress(next);
+      setFeedback({ kind: 'correct', text: '🍄 MEGA MUSHROOM BOOST!!' });
+      if (finished) {
+        window.setTimeout(
+          () => finalizeRace(next, oppStateRef.current, bossProgRef.current),
+          180
+        );
+      }
+    } else if (pu === 'coin-burst') {
+      arcadeAudio.playCoin();
+      powerUpCoinsRef.current += 15;
+      setFeedback({ kind: 'correct', text: '🧲 +15 BONUS SPEED COINS!' });
+    }
+  }, [
+    finalizeRace,
+    heldPowerUp,
+    myTeam,
+    onSendProgress,
+    perks.turboBonus,
+    raceStartedAt,
+    showTurboBanner,
+    totalLaps,
+  ]);
 
   const isSpinningOut = myState.spinoutUntil > Date.now();
   const [, setTick] = useState(0);
@@ -387,16 +545,31 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
       if (myStateRef.current.spinoutUntil > Date.now()) return;
 
       const op = problem.operation;
+      const factKey = makeFactKey(op, problem.a, problem.b);
       perOpRef.current[op].total += 1;
 
       if (chosen === problem.answer) {
         perOpRef.current[op].correct += 1;
+        masteredRef.current.add(factKey);
+
         const prev = myStateRef.current;
         const nextStreak = prev.streak + 1;
         const triggeredTurbo =
           nextStreak >= perks.turboStreakReq &&
           (nextStreak === perks.turboStreakReq || nextStreak % 3 === 0);
         const turboActive = triggeredTurbo || prev.turboUntil > Date.now();
+
+        // Award a Mario-Kart Power-Up every 4 correct in a row!
+        if (
+          config.powerUpsEnabled &&
+          nextStreak > 0 &&
+          nextStreak % 4 === 0 &&
+          !heldPowerUp
+        ) {
+          const pool: PowerUpType[] = ['shield', 'mushroom', 'coin-burst'];
+          const picked = pool[Math.floor(Math.random() * pool.length)];
+          setHeldPowerUp(picked);
+        }
 
         const baseStep = BASE_LAP_STEP * (1 + perks.speedBonus);
         const turboStep = turboActive ? 0.042 * (1 + perks.turboBonus) : 0;
@@ -436,15 +609,37 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
         setWrongTriesOnCurrent(0);
 
         if (finished) {
-          window.setTimeout(() => finalizeRace(nextState, oppStateRef.current), 180);
+          window.setTimeout(
+            () => finalizeRace(nextState, oppStateRef.current, bossProgRef.current),
+            180
+          );
         } else {
           const promptStr = `${problem.a} ${problem.symbol} ${problem.b}`;
-          setProblem(generateProblem(myMathConfig, promptStr));
+          setProblem(generateProblem(myMathConfig, promptStr, missedFactCounts));
         }
       } else {
+        const prev = myStateRef.current;
+
+        // Check if Star Shield absorbs the spin-out!
+        if (prev.shieldActive) {
+          arcadeAudio.playCoin();
+          const nextState: RacerLiveState = {
+            ...prev,
+            wrongCount: prev.wrongCount + 1,
+            shieldActive: false,
+          };
+          setMyState(nextState);
+          onSendProgress(nextState);
+          setFeedback({
+            kind: 'correct',
+            text: '🛡️ SHIELD BLOCKED THE SPIN-OUT! Try again!',
+          });
+          setTypedValue('');
+          return;
+        }
+
         arcadeAudio.playWrong(myLoadout.soundId);
         const spinMs = Math.round(950 * (1 - perks.spinoutReduction));
-        const prev = myStateRef.current;
         const nextState: RacerLiveState = {
           ...prev,
           wrongCount: prev.wrongCount + 1,
@@ -457,6 +652,7 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
 
         missedRef.current.push({
           prompt: `${problem.a} ${problem.symbol} ${problem.b}`,
+          factKey,
           correctAnswer: problem.answer,
           givenAnswer: chosen,
           operation: problem.operation,
@@ -473,7 +669,9 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
           window.setTimeout(() => {
             if (!finishedRef.current) {
               const promptStr = `${problem.a} ${problem.symbol} ${problem.b}`;
-              setProblem(generateProblem(myMathConfig, promptStr));
+              setProblem(
+                generateProblem(myMathConfig, promptStr, missedFactCounts)
+              );
             }
           }, spinMs);
         } else {
@@ -486,7 +684,10 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
       }
     },
     [
+      config.powerUpsEnabled,
       finalizeRace,
+      heldPowerUp,
+      missedFactCounts,
       myLoadout.soundId,
       myMathConfig,
       myTeam,
@@ -506,6 +707,11 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!raceStartedAt || finishedRef.current) return;
+      if (e.key === ' ' && heldPowerUp) {
+        e.preventDefault();
+        useHeldPowerUp();
+        return;
+      }
       if (myMathConfig.inputMode === 'multiple-choice') {
         const idx = ['1', '2', '3', '4'].indexOf(e.key);
         if (idx !== -1 && problem.choices[idx] !== undefined) {
@@ -529,17 +735,28 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [myMathConfig.inputMode, problem.choices, raceStartedAt, submitAnswer, typedValue]);
+  }, [
+    heldPowerUp,
+    myMathConfig.inputMode,
+    problem.choices,
+    raceStartedAt,
+    submitAnswer,
+    typedValue,
+    useHeldPowerUp,
+  ]);
 
-  const myMeta = getTeamMeta(myTeam);
-  const oppMeta = getTeamMeta(oppTeam);
+  const myMeta = getTeamMeta(myTeam, myName);
+  const oppMeta = getTeamMeta(oppTeam, opponentName);
   const activeRadioItem = getShopItem(myLoadout.radioId);
 
   const currentLap = totalLaps
     ? Math.min(totalLaps, Math.floor(myState.progress) + 1)
     : Math.floor(myState.progress) + 1;
 
-  const isLeading = myState.progress >= opponentState.progress;
+  const isLeading = isBossMode
+    ? Math.max(myState.progress, opponentState.progress) >= bossProgress
+    : myState.progress >= opponentState.progress;
+
   const turboProgress = Math.min(1, myState.streak / perks.turboStreakReq);
 
   return (
@@ -560,12 +777,22 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
           <div
             className={`hud-pill ${isLeading ? 'hud-pill--lead' : 'hud-pill--chase'}`}
           >
-            {isLeading ? '1st Place! 🥇' : '2nd Place! 💨'}
+            {isBossMode
+              ? isLeading
+                ? 'Beating Boss! 💪'
+                : 'Catch Mega-Bot! 🤖'
+              : isLeading
+              ? '1st Place! 🥇'
+              : '2nd Place! 💨'}
           </div>
+          {myState.shieldActive && (
+            <div className="hud-pill hud-pill--shield">
+              <Shield size={13} /> Shield On
+            </div>
+          )}
         </div>
 
         <div className="hud-right">
-          {/* Live Car Radio Tuner */}
           <button
             className={`radio-tuner-btn ${
               myLoadout.radioId !== 'radio-off' && !soundMuted ? 'is-playing' : ''
@@ -596,8 +823,8 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
         </div>
       </div>
 
-      {/* Live Progress Bars for Both Teams */}
-      <div className="racer-bars">
+      {/* Live Progress Bars */}
+      <div className={`racer-bars ${isBossMode ? 'racer-bars--3' : ''}`}>
         <div className={`racer-bar racer-bar--${myTeam}`}>
           <span>
             {myMeta.emoji} {myMeta.shortName} (You)
@@ -620,7 +847,7 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
         <div className={`racer-bar racer-bar--${oppTeam}`}>
           <span>
             {oppMeta.emoji} {oppMeta.shortName}{' '}
-            {mode === 'solo' ? '(CPU)' : '(Sister)'}
+            {useRemotePeer ? '(Sister)' : '(AI)'}
           </span>
           <div className="racer-bar-track">
             <div
@@ -636,6 +863,25 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
           </div>
           <strong>{opponentState.correctCount} ✓</strong>
         </div>
+
+        {isBossMode && (
+          <div className="racer-bar racer-bar--boss">
+            <span>🤖 Mega-Bot</span>
+            <div className="racer-bar-track">
+              <div
+                className="racer-bar-fill"
+                style={{
+                  width: `${
+                    totalLaps
+                      ? Math.min(100, (bossProgress / totalLaps) * 100)
+                      : Math.min(100, (bossProgress % 1) * 100)
+                  }%`,
+                }}
+              />
+            </div>
+            <strong>BOSS</strong>
+          </div>
+        )}
       </div>
 
       {/* Animated Oval Speedway Track */}
@@ -646,6 +892,8 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
           totalLaps={totalLaps}
           myTeam={myTeam}
           turboBannerTeam={turboBannerTeam}
+          trackId={config.trackId}
+          bossProgress={isBossMode ? bossProgress : null}
         />
 
         {countdown >= 0 && (
@@ -657,9 +905,24 @@ export const RaceScreen: React.FC<RaceScreenProps> = ({
         )}
       </div>
 
+      {/* Held Mario-Kart Power-Up Banner */}
+      {heldPowerUp && (
+        <button className="powerup-bar" onClick={useHeldPowerUp}>
+          <span className="powerup-emoji">{POWERUP_META[heldPowerUp].emoji}</span>
+          <div className="powerup-text">
+            <strong>USE {POWERUP_META[heldPowerUp].label.toUpperCase()}!</strong>
+            <span>{POWERUP_META[heldPowerUp].hint} (or press Space)</span>
+          </div>
+          <Sparkles size={20} />
+        </button>
+      )}
+
       {/* Math Question & Answer Arena */}
       <div className={`math-arena ${isSpinningOut ? 'math-arena--spinout' : ''}`}>
         <div className="problem-header">
+          {problem.isSmartReview && (
+            <span className="smart-review-pill">🧠 Smart Review</span>
+          )}
           <div className="problem-equation">
             <span>{problem.a}</span>
             <span className="eq-op">{problem.symbol}</span>

@@ -6,6 +6,7 @@ import {
   Coins,
   Crown,
   Lock,
+  Map as MapIcon,
   PartyPopper,
   Play,
   Radio,
@@ -42,10 +43,19 @@ const CATEGORIES: {
   { id: 'gear', label: 'Gear', icon: <Wrench size={16} /> },
   { id: 'accessory', label: 'Style', icon: <Crown size={16} /> },
   { id: 'trail', label: 'Trails', icon: <Sparkles size={16} /> },
+  { id: 'track', label: 'Tracks', icon: <MapIcon size={16} /> },
   { id: 'sound', label: 'Sounds', icon: <Volume2 size={16} /> },
   { id: 'radio', label: 'Radio', icon: <Radio size={16} /> },
   { id: 'celebration', label: 'Win Show', icon: <PartyPopper size={16} /> },
 ];
+
+const TRACK_SWATCHES: Record<string, string[]> = {
+  'track-sunny': ['#4ade80', '#22c55e', '#334155', '#ef4444', '#ffffff'],
+  'track-candy': ['#fbcfe8', '#f472b6', '#78350f', '#fb7185', '#fef08a'],
+  'track-beach': ['#22d3ee', '#06b6d4', '#fde68a', '#d97706', '#fb7185'],
+  'track-snow': ['#e0f2fe', '#7dd3fc', '#38bdf8', '#15803d', '#ffffff'],
+  'track-space': ['#1e1b4b', '#6366f1', '#ec4899', '#22d3ee', '#facc15'],
+};
 
 const GaragePreviewCanvas: React.FC<{
   team: TeamId;
@@ -167,7 +177,7 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
   const [previewingRadio, setPreviewingRadio] = useState<string | null>(null);
   const celCleanupRef = useRef<(() => void) | null>(null);
 
-  const meta = getTeamMeta(profile.team);
+  const meta = getTeamMeta(profile.team, profile.racerName);
   const perks = getEffectivePerks(profile.equipped, false);
   const items = SHOP_ITEMS.filter((i) => i.category === category);
 
@@ -203,6 +213,7 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
     if (cat === 'gear') return profile.equipped.gearId === id;
     if (cat === 'accessory') return profile.equipped.accessoryId === id;
     if (cat === 'trail') return profile.equipped.trailId === id;
+    if (cat === 'track') return profile.equipped.trackId === id;
     if (cat === 'sound') return profile.equipped.soundId === id;
     if (cat === 'radio') return profile.equipped.radioId === id;
     return profile.equipped.celebrationId === id;
@@ -348,6 +359,30 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({
                 </div>
                 <span className="perk-badge">{item.perkLabel}</span>
               </div>
+              {item.category === 'track' && TRACK_SWATCHES[item.id] && (
+                <div
+                  className="track-swatch-bar"
+                  aria-label={`${item.name} theme colors`}
+                  style={{
+                    display: 'flex',
+                    height: '16px',
+                    borderRadius: '999px',
+                    overflow: 'hidden',
+                    border: '2px solid #cbd5e1',
+                    boxShadow: 'inset 0 1px 2px rgba(15, 23, 42, 0.12)',
+                  }}
+                >
+                  {TRACK_SWATCHES[item.id].map((color, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        flex: 1,
+                        backgroundColor: color,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
               <p className="shop-card-desc">{item.description}</p>
               <div className="shop-card-footer">
                 {equipped ? (

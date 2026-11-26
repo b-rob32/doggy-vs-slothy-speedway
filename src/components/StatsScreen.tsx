@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft,
+  Brain,
   Check,
   CheckCircle2,
   Copy,
   Download,
   Flame,
+  Lock,
   Trophy,
   Upload,
   Zap,
@@ -13,6 +15,7 @@ import {
 import { SaveData, SingleOperation, TeamId } from '../types';
 import { getTeamMeta } from '../data/shop';
 import { exportSaveCode, importSaveCode } from '../engine/storage';
+import { TROPHY_BADGES } from '../engine/quests';
 
 interface StatsScreenProps {
   save: SaveData;
@@ -29,6 +32,23 @@ const OP_LABELS: { id: SingleOperation; label: string; color: string }[] = [
   { id: 'division', label: 'Division (÷)', color: '#10b981' },
 ];
 
+const OP_SYMBOL: Record<string, string> = {
+  addition: '+',
+  subtraction: '−',
+  multiplication: '×',
+  division: '÷',
+};
+
+function formatFactKey(factKey: string): string {
+  const parts = factKey.split(':');
+  if (parts.length === 3) {
+    const [op, a, b] = parts;
+    const sym = OP_SYMBOL[op] ?? op;
+    return `${a} ${sym} ${b}`;
+  }
+  return factKey;
+}
+
 export const StatsScreen: React.FC<StatsScreenProps> = ({
   save,
   activeTeam,
@@ -43,7 +63,15 @@ export const StatsScreen: React.FC<StatsScreenProps> = ({
 
   const profile = save.profiles[activeTeam];
   const stats = profile.stats;
-  const meta = getTeamMeta(activeTeam);
+  const meta = getTeamMeta(activeTeam, profile.racerName);
+  const doggyMeta = getTeamMeta('doggy', save.profiles.doggy.racerName);
+  const slothyMeta = getTeamMeta('slothy', save.profiles.slothy.racerName);
+
+  const earnedBadges = profile.badges ?? [];
+  const trickyFacts = Object.entries(profile.missedFactCounts ?? {})
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
 
   const winRate =
     stats.totalRaces > 0
@@ -124,7 +152,7 @@ export const StatsScreen: React.FC<StatsScreenProps> = ({
       {/* Overall Head-to-Head Rivalry */}
       <div className="h2h-strip">
         <div className="h2h-side h2h-doggy">
-          <span>🐶 Doggy</span>
+          <span>🐶 {doggyMeta.shortName}</span>
           <strong>{save.headToHead.doggyWins}</strong>
         </div>
         <div className="h2h-center">
@@ -133,14 +161,14 @@ export const StatsScreen: React.FC<StatsScreenProps> = ({
         </div>
         <div className="h2h-side h2h-slothy">
           <strong>{save.headToHead.slothyWins}</strong>
-          <span>Slothy 🦥</span>
+          <span>{slothyMeta.shortName} 🦥</span>
         </div>
       </div>
 
       {/* Team Switcher */}
       <div className="team-tabs">
         {(['doggy', 'slothy'] as TeamId[]).map((t) => {
-          const tm = getTeamMeta(t);
+          const tm = getTeamMeta(t, save.profiles[t].racerName);
           return (
             <button
               key={t}
@@ -189,6 +217,137 @@ export const StatsScreen: React.FC<StatsScreenProps> = ({
           <span>Longest Streak</span>
           <small>Correct in a row</small>
         </div>
+      </div>
+
+      {/* Trophy Shelf */}
+      <div className="mastery-card trophy-shelf-card">
+        <h3>
+          <Trophy size={20} style={{ color: '#eab308' }} />
+          <span>
+            {meta.shortName}&apos;s Trophy Shelf ({earnedBadges.length}/
+            {TROPHY_BADGES.length})
+          </span>
+        </h3>
+        <div
+          className="trophy-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))',
+            gap: '10px',
+          }}
+        >
+          {TROPHY_BADGES.map((badge) => {
+            const unlocked = earnedBadges.includes(badge.id);
+            return (
+              <div
+                key={badge.id}
+                className={`trophy-badge-card ${
+                  unlocked ? 'trophy-badge-card--unlocked' : 'trophy-badge-card--locked'
+                }`}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  gap: '4px',
+                  padding: '12px 10px',
+                  borderRadius: '16px',
+                  background: unlocked
+                    ? 'linear-gradient(145deg, #fefce8, #fef08a)'
+                    : '#f8fafc',
+                  border: unlocked ? '2px solid #eab308' : '2px dashed #cbd5e1',
+                  boxShadow: unlocked
+                    ? '0 4px 14px rgba(234, 179, 8, 0.3)'
+                    : 'none',
+                  opacity: unlocked ? 1 : 0.62,
+                  filter: unlocked ? 'none' : 'grayscale(0.75)',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '1.85rem',
+                    lineHeight: 1.1,
+                    position: 'relative',
+                  }}
+                >
+                  {badge.emoji}
+                </div>
+                <strong
+                  style={{
+                    fontSize: '0.88rem',
+                    color: unlocked ? '#854d0e' : '#475569',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  {!unlocked && <Lock size={12} />}
+                  {badge.name}
+                </strong>
+                <small
+                  style={{
+                    fontSize: '0.74rem',
+                    color: unlocked ? '#a16207' : '#64748b',
+                    lineHeight: 1.25,
+                  }}
+                >
+                  {badge.description}
+                </small>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Smart Practice Coach */}
+      <div className="mastery-card smart-coach-card">
+        <h3>
+          <Brain size={20} style={{ color: '#8b5cf6' }} />
+          <span>Smart Practice Coach</span>
+        </h3>
+        {trickyFacts.length === 0 ? (
+          <p className="empty-history" style={{ textAlign: 'left', padding: '4px 0' }}>
+            🌟 No tricky facts right now for {meta.shortName}! When Smart Practice is
+            enabled, any missed math facts automatically show up here and reappear in
+            future races until mastered.
+          </p>
+        ) : (
+          <>
+            <p className="missed-hint" style={{ marginTop: '-4px' }}>
+              Smart Practice is focusing on these {trickyFacts.length} tricky{' '}
+              {trickyFacts.length === 1 ? 'fact' : 'facts'} for {meta.shortName}:
+            </p>
+            <div className="missed-chips">
+              {trickyFacts.map(([factKey, count]) => (
+                <div
+                  key={factKey}
+                  className="missed-chip"
+                  style={{
+                    background: '#f5f3ff',
+                    borderColor: '#c4b5fd',
+                    color: '#4c1d95',
+                  }}
+                >
+                  <span style={{ fontFamily: "'Fredoka', sans-serif", fontSize: '1.05rem' }}>
+                    {formatFactKey(factKey)}
+                  </span>
+                  <span
+                    style={{
+                      background: '#ede9fe',
+                      color: '#6d28d9',
+                      fontSize: '0.72rem',
+                      fontWeight: 900,
+                      padding: '2px 7px',
+                      borderRadius: '999px',
+                    }}
+                  >
+                    {count}×
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Mastery by Math Operation */}
@@ -248,8 +407,12 @@ export const StatsScreen: React.FC<StatsScreenProps> = ({
                     {r.operation.toUpperCase()} ({r.difficulty})
                   </strong>
                   <small>
-                    {r.mode === 'multiplayer' ? '2-Player' : 'Solo vs CPU'} •{' '}
-                    {r.correctCount}✓ {r.wrongCount}✗ • {r.qpm} QPM
+                    {r.mode === 'multiplayer'
+                      ? '2-Player'
+                      : r.mode === 'coop-boss'
+                      ? 'Co-Op Boss'
+                      : 'Solo vs CPU'}{' '}
+                    • {r.correctCount}✓ {r.wrongCount}✗ • {r.qpm} QPM
                   </small>
                 </div>
                 <span className="history-coins">+{r.coinsEarned} 🪙</span>
@@ -261,3 +424,4 @@ export const StatsScreen: React.FC<StatsScreenProps> = ({
     </div>
   );
 };
+
